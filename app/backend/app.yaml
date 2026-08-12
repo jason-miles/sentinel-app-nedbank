@@ -16,13 +16,13 @@ env:
   # Serving warehouse the app queries run on. Shared workspace warehouse is fine
   # (queries are schema-scoped to nedbank_fraud_aml_*); override if isolating.
   - name: FRAUD_WAREHOUSE_ID
-    value: "e227fa247dd5bedd"
+    value: "eeee8ab1661ce350"
   # Nedbank-specific Genie space + dashboard, both pointed at nedbank_fraud_aml_* and
   # provisioned during deployment (placeholders — set to the real IDs after creating
   # them; see DEPLOY.md step 4).
   - name: SENTINEL_GENIE_SPACE
-    value: "REPLACE_WITH_NEDBANK_GENIE_SPACE_ID"
+    value: "01f1962af9e61338a2c438fe01a7f352"
   - name: SENTINEL_DASHBOARD_ID
-    value: "REPLACE_WITH_NEDBANK_DASHBOARD_ID"
+    value: "01f1962b09fc173296fdc15c62aefb4e"
   - name: DATABRICKS_HOST
     value: "https://fevm-elexon-app-for-settlement-acc.cloud.databricks.com"

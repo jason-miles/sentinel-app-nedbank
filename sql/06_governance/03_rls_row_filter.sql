@@ -29,7 +29,7 @@ USE CATALOG elexon_app_for_settlement_acc_catalog;
 
 CREATE OR REPLACE FUNCTION nedbank_fraud_aml_gold.rls_case_team(team_id STRING)
 RETURN
-  current_user() = 'ec6d288f-0870-4db0-b009-0de91c1ed3e8'      -- Nedbank app SP (keeps app working)
+  current_user() = 'ccd34fed-be3f-4bfb-a13b-7064c4fe9eca'      -- Nedbank app SP (keeps app working)
   OR is_account_group_member('aml_compliance_oversight')        -- oversight/CCO
   OR current_user() = 'jason.miles@databricks.com'              -- deploying owner
   OR is_account_group_member(concat('aml_team_', lower(team_id)));  -- per-team analyst

@@ -15,7 +15,7 @@ from ..config import get_workspace_client, GOLD_SCHEMA
 router = APIRouter(prefix="/api/genai", tags=["genai"])
 
 LLM = "databricks-meta-llama-3-3-70b-instruct"
-GENIE_SPACE = os.environ.get("SENTINEL_GENIE_SPACE", "REPLACE_WITH_NEDBANK_GENIE_SPACE_ID")
+GENIE_SPACE = os.environ.get("SENTINEL_GENIE_SPACE", "01f1962af9e61338a2c438fe01a7f352")
 
 
 def _aiq(prompt: str) -> str:
