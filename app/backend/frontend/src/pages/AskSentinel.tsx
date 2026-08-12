@@ -60,7 +60,7 @@ export function AskSentinel() {
               {t.rows && t.rows.length > 0 && (
                 <div style={{ overflowX: "auto", marginTop: 10 }}>
                   <table>
-                    <thead><tr>{(t.columns || []).map((c) => <th key={c}>{c}</th>)}</tr></thead>
+                    <thead><tr>{(t.columns || []).map((c) => <th scope="col" key={c}>{c}</th>)}</tr></thead>
                     <tbody>
                       {t.rows.slice(0, 20).map((r, ri) => (
                         <tr key={ri}>{(t.columns || []).map((c) => <td key={c}>{String(r[c])}</td>)}</tr>

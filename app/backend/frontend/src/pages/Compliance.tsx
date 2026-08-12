@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getScreening, getPkyc, getPkycSummary, getAnomalies, getModelGovernance, getModelDrift, getLlmEval, getAudit } from "../api";
+import { getScreening, getPkyc, getPkycSummary, getAnomalies, getModelGovernance, getModelDrift, getLlmEval, getAudit, getImpossibleTravel } from "../api";
 import { Loading, ErrorState, num, money } from "../components/ui";
 
 function Badge({ s }: { s: string }) {
@@ -9,21 +9,23 @@ function Badge({ s }: { s: string }) {
 }
 
 export function Compliance() {
-  const [tab, setTab] = useState<"screening" | "pkyc" | "anomaly" | "model" | "audit">("screening");
+  const [tab, setTab] = useState<"screening" | "pkyc" | "anomaly" | "travel" | "model" | "audit">("screening");
   return (
     <>
       <h1 className="page-title">Compliance & Risk</h1>
-      <p className="page-sub">Sanctions & watchlist screening · perpetual KYC · behavioural peer-group anomaly detection · model governance · audit trail.</p>
+      <p className="page-sub">Sanctions & watchlist screening · perpetual KYC · behavioural peer-group anomaly detection · impossible travel · model governance · audit trail.</p>
       <div className="tabs">
         <button className={tab === "screening" ? "active" : ""} onClick={() => setTab("screening")}>Sanctions Screening</button>
         <button className={tab === "pkyc" ? "active" : ""} onClick={() => setTab("pkyc")}>Perpetual KYC</button>
         <button className={tab === "anomaly" ? "active" : ""} onClick={() => setTab("anomaly")}>Peer Anomalies</button>
+        <button className={tab === "travel" ? "active" : ""} onClick={() => setTab("travel")}>Impossible Travel</button>
         <button className={tab === "model" ? "active" : ""} onClick={() => setTab("model")}>Model Governance</button>
         <button className={tab === "audit" ? "active" : ""} onClick={() => setTab("audit")}>Audit Trail</button>
       </div>
       {tab === "screening" && <Screening />}
       {tab === "pkyc" && <Pkyc />}
       {tab === "anomaly" && <Anomaly />}
+      {tab === "travel" && <ImpossibleTravel />}
       {tab === "model" && <ModelGovernance />}
       {tab === "audit" && <AuditTrail />}
     </>
@@ -55,7 +57,7 @@ function AuditTrail() {
         {rows.length === 0
           ? <p className="muted" style={{ margin: "10px 0 0" }}>No audit events yet. Open a case, add a note, or file a SAR to generate an entry.</p>
           : <table>
-              <thead><tr><th>Timestamp</th><th>Actor</th><th>Action</th><th>Case</th><th>Detail</th><th>Source</th></tr></thead>
+              <thead><tr><th scope="col">Timestamp</th><th scope="col">Actor</th><th scope="col">Action</th><th scope="col">Case</th><th scope="col">Detail</th><th scope="col">Source</th></tr></thead>
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={i}>
@@ -134,7 +136,7 @@ function ModelGovernance() {
             <strong> drift</strong> verdict triggers a retrain (scheduled job <span className="mono">fraud_ml_retrain</span>).
           </p>
           <table>
-            <thead><tr><th>Feature</th><th>Baseline μ</th><th>Current μ</th><th>Shift (σ)</th><th>Status</th></tr></thead>
+            <thead><tr><th scope="col">Feature</th><th scope="col">Baseline μ</th><th scope="col">Current μ</th><th scope="col">Shift (σ)</th><th scope="col">Status</th></tr></thead>
             <tbody>
               {(drift.features || []).map((f: any, i: number) => (
                 <tr key={i}>
@@ -193,7 +195,7 @@ function Screening() {
       <div className="panel">
         <h3 className="left">Screening Hits — customers & counterparties vs sanctions / PEP / adverse watchlists</h3>
         <table>
-          <thead><tr><th>Entity</th><th>Type</th><th>Watchlist Match</th><th>List</th><th>Source</th><th>Confidence</th><th>Score</th><th>Reason</th></tr></thead>
+          <thead><tr><th scope="col">Entity</th><th scope="col">Type</th><th scope="col">Watchlist Match</th><th scope="col">List</th><th scope="col">Source</th><th scope="col">Confidence</th><th scope="col">Score</th><th scope="col">Reason</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.screening_id}>
@@ -239,7 +241,7 @@ function Pkyc() {
       <div className="panel">
         <h3 className="left">Dynamic Customer Risk — continuously recomputed from alerts, sanctions, adverse media, geography & exposure</h3>
         <table>
-          <thead><tr><th>Customer</th><th>Segment</th><th>Country</th><th>Dynamic Risk</th><th>Band</th><th>EDD</th><th>Risk Drivers</th></tr></thead>
+          <thead><tr><th scope="col">Customer</th><th scope="col">Segment</th><th scope="col">Country</th><th scope="col">Dynamic Risk</th><th scope="col">Band</th><th scope="col">EDD</th><th scope="col">Risk Drivers</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.customer_id}>
@@ -259,6 +261,42 @@ function Pkyc() {
   );
 }
 
+function ImpossibleTravel() {
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState(false);
+  const load = () => { setErr(false); getImpossibleTravel().then((r) => { setRows(r); setLoading(false); }).catch(() => { setErr(true); setLoading(false); }); };
+  useEffect(() => { load(); }, []);
+  if (loading) return <Loading what="impossible-travel alerts" />;
+  if (err) return <ErrorState what="impossible-travel alerts" onRetry={() => { setLoading(true); load(); }} />;
+  return (
+    <div className="panel">
+      <h3 className="left">Impossible Travel — one card tapped in two places too far apart to be physical</h3>
+      <p className="muted" style={{ marginTop: 0 }}>Geospatial velocity on card taps (haversine km ÷ elapsed time). An implied speed above ~900 km/h can't be a real journey — a strong card-compromise / cloning signal.</p>
+      {rows.length === 0 && <span className="muted">No impossible-travel alerts.</span>}
+      {rows.map((r) => {
+        const legs = r.legs || [];
+        const a = legs[0] || {}; const b = legs[1] || {};
+        return (
+          <div key={r.alert_id} className="explain" style={{ marginBottom: 12, borderLeft: "3px solid var(--critical)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 700 }}>{a.city || r.from_city}</span>
+              <span className="muted">{a.country || ""} {a.merchant ? `· ${a.merchant}` : ""}</span>
+              <span style={{ color: "var(--critical)", fontWeight: 700 }}>→</span>
+              <span style={{ fontWeight: 700 }}>{b.city || r.to_city}</span>
+              <span className="muted">{b.country || ""} {b.merchant ? `· ${b.merchant}` : ""}</span>
+              <span className="badge sev-critical" style={{ marginLeft: "auto" }}>{Number(r.implied_kmh).toLocaleString()} km/h</span>
+            </div>
+            <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
+              Card <span className="mono">{r.account_id}</span> · score {Number(r.score).toFixed(2)} · {r.explanation}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function Anomaly() {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -273,7 +311,7 @@ function Anomaly() {
         <h3 className="left">Behavioural Peer-Group Anomalies — customers behaving unlike their segment peers (unsupervised, 3σ+)</h3>
         <p className="muted" style={{ marginTop: 0 }}>Catches novel typologies fixed thresholds miss — the false-positive-reduction story.</p>
         <table>
-          <thead><tr><th>Customer</th><th>Segment</th><th>Txns (90d)</th><th>Peer Avg</th><th>Anomaly σ</th><th>Severity</th><th>Explanation</th></tr></thead>
+          <thead><tr><th scope="col">Customer</th><th scope="col">Segment</th><th scope="col">Txns (90d)</th><th scope="col">Peer Avg</th><th scope="col">Anomaly σ</th><th scope="col">Severity</th><th scope="col">Explanation</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.customer_id}>

@@ -70,7 +70,7 @@ export function Investigation() {
           <div className="panel">
             <h3 className="left">Flagged Transactions</h3>
             <table>
-              <thead><tr><th>ID</th><th>Dir</th><th>Amount</th><th>Channel</th><th>Date</th></tr></thead>
+              <thead><tr><th scope="col">ID</th><th scope="col">Dir</th><th scope="col">Amount</th><th scope="col">Channel</th><th scope="col">Date</th></tr></thead>
               <tbody>
                 {(c.flagged_transactions || []).map((t: any) => (
                   <tr key={t.transaction_id}>

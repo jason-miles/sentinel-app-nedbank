@@ -85,7 +85,7 @@ function AlertsOverview() {
       </div>
       <AiBriefing />
       <div className="kpis">
-        <Kpi label="Transaction Amount $" tone="green" value={`${num(kpis.transaction_amount_m).toLocaleString()}m`} delta={-21.87} prev="208.19m" />
+        <Kpi label="Transaction Amount (ZAR)" tone="green" value={`R${num(kpis.transaction_amount_m).toLocaleString()}m`} delta={-21.87} prev="R208.19m" />
         <Kpi label="Case Volume" tone="green" value={kpis.case_volume} delta={-30.06} prev="163" />
         <Kpi label="Upcoming Deadlines" tone="green" value={kpis.upcoming_deadlines} delta={-13.46} prev="52" />
         <Kpi label="Avg. Investigation Hours" tone="red" value={kpis.avg_investigation_hours} delta={9.73} prev="4.21" />
@@ -174,7 +174,7 @@ function Heatmap({ data }: { data: any[] }) {
   };
   return (
     <table>
-      <thead><tr><th></th>{statuses.map((s) => <th key={s} style={{ textAlign: "center" }}>{s}</th>)}</tr></thead>
+      <thead><tr><th scope="col"></th>{statuses.map((s) => <th scope="col" key={s} style={{ textAlign: "center" }}>{s}</th>)}</tr></thead>
       <tbody>
         {priorities.map((p) => (
           <tr key={p}>
@@ -215,7 +215,7 @@ function TeamPerformance() {
       <div className="panel">
         <h3 className="left">Team Breakdown</h3>
         <table>
-          <thead><tr><th>Team</th><th>Cases</th><th>Closed</th><th>Past Due</th><th>Avg Hours</th><th>Avg Risk</th></tr></thead>
+          <thead><tr><th scope="col">Team</th><th scope="col">Cases</th><th scope="col">Closed</th><th scope="col">Past Due</th><th scope="col">Avg Hours</th><th scope="col">Avg Risk</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.team_name}>

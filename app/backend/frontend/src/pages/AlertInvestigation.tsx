@@ -114,7 +114,7 @@ export function AlertInvestigation() {
           </div>
         </div>
         <table>
-          <thead><tr><th>Alert ID</th><th>Customer</th><th>Scenario</th><th>Rules Score</th><th>AI Risk</th><th>Priority</th><th>Amount</th><th>Days</th><th>SLA</th><th>Action</th></tr></thead>
+          <thead><tr><th scope="col">Alert ID</th><th scope="col">Customer</th><th scope="col">Scenario</th><th scope="col">Rules Score</th><th scope="col">AI Risk</th><th scope="col">Priority</th><th scope="col">Amount</th><th scope="col">Days</th><th scope="col">SLA</th><th scope="col">Action</th></tr></thead>
           <tbody>
             {(data.active_alerts || []).map((a: any) => <AlertRow key={a.case_id} a={a} nav={nav} />)}
           </tbody>

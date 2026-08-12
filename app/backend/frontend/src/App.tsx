@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { PersonaProvider, usePersona } from "./components/ui";
 import { BrandMark } from "./components/Logo";
+import { StoryMode } from "./components/StoryMode";
 
 // Theme: persisted to localStorage, defaulting to the OS preference.
 function useTheme(): [string, () => void] {
@@ -45,6 +46,7 @@ function TopBar() {
         <NavLink to="/architecture" className={({ isActive }) => (isActive ? "active" : "")}>Architecture</NavLink>
         <NavLink to="/ask" className={({ isActive }) => (isActive ? "active" : "")}>Ask Sentinel</NavLink>
       </nav>
+      <StoryMode />
       <button className="theme-toggle" onClick={toggleTheme}
         title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} aria-label="Toggle theme">
         {theme === "dark" ? "☀" : "☾"}

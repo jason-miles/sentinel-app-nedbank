@@ -84,7 +84,7 @@ export function SarFiling() {
         <div className="panel">
           <h3 className="left">Grounded Adverse Media <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>(vector-search retrieved — cited in the narrative)</span></h3>
           <table>
-            <thead><tr><th>Headline</th><th>Source</th><th>Published</th><th>Relevance</th></tr></thead>
+            <thead><tr><th scope="col">Headline</th><th scope="col">Source</th><th scope="col">Published</th><th scope="col">Relevance</th></tr></thead>
             <tbody>
               {ev.adverse_media.map((a: any, i: number) => (
                 <tr key={i}>
@@ -103,7 +103,7 @@ export function SarFiling() {
         <div className="panel">
           <h3 className="left">Grounded Policy &amp; Typology <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>(bank AML policy + FATF — vector-search retrieved, cited in the narrative)</span></h3>
           <table>
-            <thead><tr><th>Reference</th><th>Type</th><th>Jurisdiction</th><th>Relevance</th></tr></thead>
+            <thead><tr><th scope="col">Reference</th><th scope="col">Type</th><th scope="col">Jurisdiction</th><th scope="col">Relevance</th></tr></thead>
             <tbody>
               {ev.policy.map((d: any, i: number) => (
                 <tr key={i}>

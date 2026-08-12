@@ -69,6 +69,8 @@ export const getModelDrift = () => apiGet(`${A}/model-drift`);
 export const getLlmEval = () => apiGet(`${A}/llm-eval`);
 export const getAudit = (limit = 100) => apiGet(`${A}/audit?limit=${limit}`);
 export const getAuditSummary = () => apiGet(`${A}/audit/summary`);
+// Impossible-travel alerts (geospatial card-tap velocity)
+export const getImpossibleTravel = () => apiGet(`/api/impossible-travel`);
 
 // GenAI
 const G = "/api/genai";
