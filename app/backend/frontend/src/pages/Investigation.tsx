@@ -51,6 +51,21 @@ export function Investigation() {
       <h1 className="page-title" style={{ marginTop: 8 }}>{c.customer_name} <Sev s={c.priority} /></h1>
       <p className="page-sub">{c.scenario} · case <span className="mono">{c.case_id}</span> · {c.team_name}</p>
 
+      {/* Impact banner — the "why this matters" beat. Shows how the AI model reprioritised
+          a case a rules-only engine would have buried, especially for structuring/mule. */}
+      {c.ai_risk != null && num(c.ai_risk) >= 80 && (
+        <div className="impact-banner">
+          <span className="impact-ico">✦</span>
+          <div>
+            <strong>AI caught what siloed rules would miss.</strong>{" "}
+            {/^cash structuring/i.test(c.scenario || "")
+              ? "Each deposit sat just under the reporting threshold — individually dismissible. Entity resolution linked this account to a wider mule network; sibling accounts had been closed as false positives in isolation."
+              : "The served model reprioritised this case above look-alike false positives using network, behavioural and typology signals a fixed-threshold rule can't see."}{" "}
+            <span className="impact-metric">Rules {c.risk_score} → AI {c.ai_risk}</span>
+          </div>
+        </div>
+      )}
+
       <div className="kpis">
         <div className="kpi"><div className="label">Rules Score</div><div className="value" style={{ color: "var(--muted)" }}>{c.risk_score}</div></div>
         <div className="kpi" title={c.model_version ? `Served model v${c.model_version}` : ""}>

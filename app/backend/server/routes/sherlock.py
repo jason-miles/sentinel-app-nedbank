@@ -393,19 +393,33 @@ def graph(q: Optional[str] = None, limit: int = 12):
     """Knowledge graph: top-risk customers + their accounts + counterparties +
     watchlist hits. Optional NL query filters the seed customers via ai_query
     keyword extraction (kept simple: match against name/scenario/country)."""
+    # Optional NL query: a match on the customer name, scenario, or (for the mule
+    # network) their shared address/counterparty is boosted to the top so a search like
+    # "Motaung mule network" surfaces the cluster, not just the global top-risk list.
+    like = f"%{(q or '').strip().split()[0]}%" if (q or "").strip() else None
+    match_params = [{"name": "kw", "value": like}] if like else []
+    match_expr = ("""
+      CASE WHEN cust.full_name ILIKE :kw OR c.scenario ILIKE :kw
+                OR cust.address ILIKE :kw OR cust.customer_id IN (
+                  SELECT a.customer_id FROM {SILVER}.accounts a
+                  JOIN {SILVER}.transactions t ON t.account_id = a.account_id
+                  JOIN {SILVER}.third_parties tp ON tp.third_party_id = t.counterparty_id
+                  WHERE tp.full_name ILIKE :kw)
+           THEN 1 ELSE 0 END""".format(SILVER=SILVER_SCHEMA)) if like else "0"
     seed = fetch_all(f"""
 SELECT customer_id, full_name, city, country, risk FROM (
   SELECT c.customer_id, cust.full_name, cust.city, cust.country,
          coalesce(c360.current_risk_rating, 3) AS risk,
-         max(c.risk_score) AS max_score
+         max(c.risk_score) AS max_score,
+         max({match_expr}) AS is_match
   FROM {GOLD_SCHEMA}.sherlock_cases c
   JOIN {SILVER_SCHEMA}.customers cust ON cust.customer_id = c.customer_id
   LEFT JOIN {GOLD_SCHEMA}.customer_360 c360 ON c360.customer_id = c.customer_id
   GROUP BY c.customer_id, cust.full_name, cust.city, cust.country, c360.current_risk_rating
 )
-ORDER BY max_score DESC
+ORDER BY is_match DESC, max_score DESC
 LIMIT {int(limit)}
-""")
+""", match_params or None)
     nodes, edges, seen = [], [], set()
 
     def add_node(nid, label, kind, score=None):

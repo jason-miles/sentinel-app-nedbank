@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } fro
 import { getQueue, casePrioritize, simLiveAlert } from "../api";
 import { Sev, Loading, ErrorState, usePersona, num, money, LiveControls } from "../components/ui";
 
-// Nedbank tonal palette: deep-blue shades + signature red + muted blue-grey.
+// Nedbank tonal palette: signature-green shades + muted sage.
 const SCEN_COLORS: Record<string, string> = {
   "Cash Structuring Detection": "#006341", "Dormant Account Reactivation": "#0a7a53",
   "Rapid Fund Movement": "#3fae7e", "Related Account Movement": "#044a33",
@@ -44,6 +44,13 @@ export function AlertInvestigation() {
     setSimBusy(false);
     setTimeout(() => setSimMsg(""), 9000);
   }
+
+  // Story Mode fires this so the "real-time detection" beat actually happens on screen.
+  useEffect(() => {
+    const h = () => { simulate(); };
+    window.addEventListener("sentinel:sim-live-alert", h);
+    return () => window.removeEventListener("sentinel:sim-live-alert", h);
+  }, [current, fPriority, fScenario]);
 
   // Initial load (with spinner) whenever persona or filters change.
   const load = () => {

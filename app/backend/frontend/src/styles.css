@@ -294,3 +294,9 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--n
 @keyframes story-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 /* Impossible-travel world map */
 .travel-map { width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 16px; background: var(--graph-bg); }
+/* Investigation impact banner — the "AI vs rules" wow beat */
+.impact-banner { display: flex; gap: 14px; align-items: flex-start; background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 12%, var(--panel)) 0%, var(--panel) 60%);
+  border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 20px; }
+.impact-ico { font-size: 20px; color: var(--accent); line-height: 1.3; }
+.impact-banner strong { color: var(--navy); }
+.impact-metric { display: inline-block; margin-left: 4px; font-weight: 700; color: var(--critical); white-space: nowrap; }

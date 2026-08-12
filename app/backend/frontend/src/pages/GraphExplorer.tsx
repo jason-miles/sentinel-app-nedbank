@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import cytoscape from "cytoscape";
 import { getGraph } from "../api";
 import { Loading, ErrorState, num } from "../components/ui";
 
 const CHIPS = [
+  "Motaung mule network",
   "high risk customers with offshore connections",
   "customers flagged for structuring cash deposits",
   "watchlist matches with high risk scores",
-  "accounts linked to money service businesses",
   "counterparties in high risk jurisdictions",
 ];
 const KIND_COLOR: Record<string, string> = {
@@ -16,7 +17,8 @@ const KIND_COLOR: Record<string, string> = {
 };
 
 export function GraphExplorer() {
-  const [q, setQ] = useState("");
+  const [params, setParams] = useSearchParams();
+  const [q, setQ] = useState(params.get("q") || "");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(false);
@@ -29,7 +31,14 @@ export function GraphExplorer() {
     setErr(false);
     getGraph(query, 12).then((d) => { setErr(false); setData(d); setLoading(false); }).catch(() => { setErr(true); setLoading(false); });
   };
-  useEffect(() => { run(); }, []);
+  // Deep-linkable: /graph?q=Motaung opens straight to that network (used by Story Mode
+  // and shareable links). Re-runs when the URL query changes.
+  useEffect(() => {
+    const urlQ = params.get("q") || "";
+    setQ(urlQ);
+    run(urlQ);
+  }, [params]);
+  const search = (query: string) => { setParams(query ? { q: query } : {}); };
 
   // (Re)build the Cytoscape graph whenever data changes.
   useEffect(() => {
@@ -78,11 +87,11 @@ export function GraphExplorer() {
       <h1 className="page-title">Graph Explorer</h1>
       <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
         <input aria-label="Search the knowledge graph" style={{ flex: 1 }} placeholder="Search the knowledge graph with natural language…"
-          value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && run(q)} />
-        <button className="btn" onClick={() => run(q)}>Search</button>
+          value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search(q)} />
+        <button className="btn" onClick={() => search(q)}>Search</button>
       </div>
       <div style={{ marginBottom: 16 }}>
-        {CHIPS.map((c) => <button key={c} type="button" className="chip" onClick={() => { setQ(c); run(c); }}>{c}</button>)}
+        {CHIPS.map((c) => <button key={c} type="button" className="chip" onClick={() => search(c)}>{c}</button>)}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: 18 }}>

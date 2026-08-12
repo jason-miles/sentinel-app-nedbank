@@ -12,6 +12,7 @@ type Step = {
   route: string;
   say: string;
   tip?: string;          // optional "what to point at" hint
+  action?: string;       // optional side-effect the step performs (e.g. fire the live sim)
 };
 
 // The narration is brand-neutral (no bank name) so the same steps ship to all three
@@ -34,16 +35,17 @@ const STEPS: Step[] = [
   {
     title: "1 · The hidden mule network",
     beat: "DETECT",
-    route: "/graph",
-    say: "Entity resolution is the reveal. This one account shares a device fingerprint, IP and address with six others — all opened within three weeks — each forwarding ~90% within 48 hours to one aggregator that remits cross-border. Three siblings were previously closed as false positives in isolation. Sentinel sees the network.",
-    tip: "Graph Explorer — search “Motaung” (the aggregator). 7-account cluster + cross-border cash-out.",
+    route: "/graph?q=Motaung%20mule%20network",
+    say: "Entity resolution is the reveal — and it's on screen now. This account shares a device fingerprint, IP and address with six others, all opened within three weeks, each forwarding ~90% within 48 hours to one aggregator that remits cross-border. Three siblings were previously closed as false positives in isolation. Sentinel sees the whole network.",
+    tip: "The graph opened straight to the Motaung cluster — 7 linked accounts + cross-border cash-out.",
   },
   {
     title: "1 · Real-time detection",
     beat: "DETECT",
     route: "/investigation",
-    say: "Detection is live. Click “⚡ Simulate live transaction” on the queue: a fresh suspicious transaction streams in and a new critical alert lands at the top of the analyst's queue in seconds — no overnight batch. This is streaming detection on the Lakehouse.",
-    tip: "My Queue → ⚡ Simulate live transaction — a new critical case appears instantly.",
+    action: "sim-live-alert",
+    say: "Detection is live. Watch — a fresh suspicious transaction just streamed in and a new critical alert lands at the top of the queue in seconds, no overnight batch. This is streaming detection on the Lakehouse.",
+    tip: "A new critical case appeared instantly at the top of the queue — triggered live.",
   },
   {
     title: "2 · STR drafted in seconds",
@@ -82,10 +84,16 @@ export function StoryMode() {
   const AUTO_MS = 11000; // ~11s per beat (enough to read the narration)
   const [paused, setPaused] = useState(false);
 
-  // On each step, navigate to its route.
+  // On each step, navigate to its route and fire any side-effect action after the
+  // destination page has had a moment to mount (so its listener is attached).
   useEffect(() => {
     if (!playing) return;
     nav(STEPS[i].route);
+    const action = STEPS[i].action;
+    if (action) {
+      const t = setTimeout(() => window.dispatchEvent(new CustomEvent(`sentinel:${action}`)), 900);
+      return () => clearTimeout(t);
+    }
   }, [playing, i, nav]);
 
   // Auto-advance timer (skipped when paused or on the last step).
