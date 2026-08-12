@@ -13,6 +13,8 @@ type Step = {
   say: string;
   tip?: string;          // optional "what to point at" hint
   action?: string;       // optional side-effect the step performs (e.g. fire the live sim)
+  dwell?: number;        // optional auto-advance override (ms) — e.g. the SAR step needs
+                         // longer so the multi-agent narrative (~17s) renders before moving on
 };
 
 // The narration is brand-neutral (no bank name) so the same steps ship to all three
@@ -51,7 +53,8 @@ const STEPS: Step[] = [
     title: "2 · STR drafted in seconds",
     beat: "DOCUMENT",
     route: "/sar/CASE-90001",
-    say: "The multi-agent workflow auto-gathers the evidence pack and drafts a regulator-format STR — grounded in retrieved adverse media and the bank's own AML policy and FATF typologies, with a schema-valid goAML XML ready for the Financial Intelligence Centre. Hours of analyst work in seconds.",
+    dwell: 24000,  // the multi-agent narrative takes ~17s to render — hold so it lands
+    say: "Watch the multi-agent workflow run: it auto-gathers the evidence pack and drafts a regulator-format STR — grounded in retrieved adverse media and the bank's own AML policy and FATF typologies, with a schema-valid goAML XML ready for the Financial Intelligence Centre. Hours of analyst work in seconds.",
     tip: "SAR Filing — multi-agent trace, cited narrative, “✓ goAML schema valid (12/12)”.",
   },
   {
@@ -96,13 +99,15 @@ export function StoryMode() {
     }
   }, [playing, i, nav]);
 
-  // Auto-advance timer (skipped when paused or on the last step).
+  // Auto-advance timer (skipped when paused or on the last step). A step may override
+  // the dwell (e.g. the SAR step waits for the multi-agent narrative to render).
+  const dwell = STEPS[i].dwell || AUTO_MS;
   useEffect(() => {
     if (!playing || paused) return;
     if (i >= STEPS.length - 1) return;
-    const t = setTimeout(() => setI((n) => Math.min(n + 1, STEPS.length - 1)), AUTO_MS);
+    const t = setTimeout(() => setI((n) => Math.min(n + 1, STEPS.length - 1)), dwell);
     return () => clearTimeout(t);
-  }, [playing, paused, i]);
+  }, [playing, paused, i, dwell]);
 
   // Esc closes; Space toggles pause; arrows step.
   useEffect(() => {
@@ -135,7 +140,7 @@ export function StoryMode() {
       <div className="story-card">
         {/* auto-advance progress bar (re-keys each step to restart the animation) */}
         {!paused && i < STEPS.length - 1 && (
-          <div key={i} className="story-progress"><span style={{ animationDuration: `${AUTO_MS}ms` }} /></div>
+          <div key={i} className="story-progress"><span style={{ animationDuration: `${dwell}ms` }} /></div>
         )}
         <div className="story-head">
           <span className="story-beat" style={{ background: BEAT_COLOR[s.beat] }}>{s.beat}</span>

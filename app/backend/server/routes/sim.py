@@ -28,6 +28,18 @@ _SUBJECTS = [
 def live_alert():
     """Simulate a live incoming suspicious transaction -> a new high-priority case.
     Returns the new case so the UI can highlight it appearing in the queue."""
+    # Keep the demo clean: prune older simulated cases so repeated runs (and Story Mode)
+    # never pile up CASE-LIVE-* rows that inflate the queue / case-volume KPI.
+    try:
+        execute(f"""
+DELETE FROM {GOLD_SCHEMA}.sherlock_cases
+WHERE case_id LIKE 'CASE-LIVE-%'
+  AND case_id NOT IN (
+    SELECT case_id FROM {GOLD_SCHEMA}.sherlock_cases
+    WHERE case_id LIKE 'CASE-LIVE-%' ORDER BY opened_at DESC LIMIT 2)
+""", [])
+    except Exception:
+        pass
     n = fetch_all(f"SELECT count(*) AS c FROM {GOLD_SCHEMA}.sherlock_cases")
     seq = int((n[0]["c"] if n else 0)) % len(_SUBJECTS)
     name, scenario, risk, amount = _SUBJECTS[seq]

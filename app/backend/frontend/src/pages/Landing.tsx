@@ -9,7 +9,7 @@ export function Landing() {
 
       <div className="stat-band">
         <div className="s"><div className="n">90%</div><div className="l">Faster Investigations</div></div>
-        <div className="s"><div className="n">50%</div><div className="l">Fewer False Positives</div></div>
+        <div className="s"><div className="n">40%+</div><div className="l">Fewer False Positives</div></div>
         <div className="s"><div className="n">R1bn+</div><div className="l">Fraud Losses Prevented</div></div>
         <div className="s"><div className="n">12M+</div><div className="l">Nedbank Clients Protected</div></div>
       </div>
