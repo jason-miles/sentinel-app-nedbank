@@ -1,0 +1,24 @@
+-- Phase 3 Intelligence: Vector Search index over the adverse-media corpus.
+-- PRD §6.6 prefers vector_search over an ingested adverse-media index for
+-- grounding (semantic match), with ai_query summarising the top hits.
+--
+-- Prereqs (already applied):
+--   ALTER TABLE ...bronze.adverse_media SET TBLPROPERTIES (delta.enableChangeDataFeed = true);
+--
+-- Index created via the Databricks Vector Search API on endpoint
+-- 'valterra-vs-endpoint' (reused; STANDARD, ONLINE):
+--   name:        ...gold.adverse_media_index
+--   source:      ...bronze.adverse_media
+--   primary_key: article_id
+--   embedding:   body -> databricks-gte-large-en (managed embeddings)
+--   pipeline:    TRIGGERED
+--
+-- Query pattern from SQL (semantic adverse-media screening for an entity name):
+--   SELECT * FROM vector_search(
+--     index => 'elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_gold.adverse_media_index',
+--     query_text => 'Sipho Dlamini money laundering Onyx Capital',
+--     num_results => 3
+--   );
+--
+-- The AI-grounded summary table (ai_query) lives in 02_adverse_media_ai.sql and
+-- is the analyst-facing explanation surface (gold.adverse_media_analysis).

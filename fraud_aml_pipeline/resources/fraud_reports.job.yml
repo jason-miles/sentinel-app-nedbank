@@ -1,0 +1,23 @@
+# PRD §7.2 — scheduled daily fraud & AML report / detection refresh.
+# Runs the detection pipeline (full refresh so all datasets recompute in
+# dependency order), then emails on completion. The app + report views read the
+# refreshed gold tables. High-severity email alerting (§7.1) rides on this job's
+# notifications; a richer per-alert email step can be added as a notebook task.
+resources:
+  jobs:
+    fraud_aml_daily_report:
+      name: nedbank_fraud_aml_daily_report
+      trigger:
+        periodic:
+          interval: 1
+          unit: DAYS
+      email_notifications:
+        on_success:
+          - jason.miles@databricks.com
+        on_failure:
+          - jason.miles@databricks.com
+      tasks:
+        - task_key: refresh_detection
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.fraud_aml_pipeline_etl.id}
+            full_refresh: true

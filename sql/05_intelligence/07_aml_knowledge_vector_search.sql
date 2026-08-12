@@ -1,0 +1,35 @@
+-- Phase 3 Intelligence: Vector Search index over the AML knowledge corpus.
+-- Grounds the SAR "policy" specialist agent and the retrospective typology sweep in
+-- the bank's own AML policy, escalation matrix, typology guides, and FATF references
+-- (RAG) — so the copilot cites "why this matters" and the bank's own rules, the
+-- credibility beat compliance audiences look for.
+--
+-- Prereqs:
+--   ALTER TABLE ...bronze.aml_knowledge  SET TBLPROPERTIES (delta.enableChangeDataFeed = true);
+--   ALTER TABLE ...bronze.sar_narratives SET TBLPROPERTIES (delta.enableChangeDataFeed = true);
+--
+-- Indexes created via the Databricks Vector Search API on the shared endpoint
+-- (STANDARD, ONLINE):
+--   name:        ...gold.aml_knowledge_index
+--   source:      ...bronze.aml_knowledge
+--   primary_key: doc_id
+--   embedding:   body -> databricks-gte-large-en (managed embeddings)
+--   pipeline:    TRIGGERED
+--
+--   name:        ...gold.sar_narratives_index
+--   source:      ...bronze.sar_narratives
+--   primary_key: sar_id
+--   embedding:   narrative -> databricks-gte-large-en (managed embeddings)
+--   pipeline:    TRIGGERED
+--
+-- Query pattern (policy grounding for a detected typology):
+--   SELECT * FROM vector_search(
+--     index => 'elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_gold.aml_knowledge_index',
+--     query_text => 'money mule network structuring cash deposits forwarded cross-border',
+--     num_results => 3
+--   );
+--
+-- Query pattern (retrospective typology sweep — Scenario C):
+--   Given a FATF typology description, semantic-match it against aml_knowledge and
+--   join the returned typology to the transaction/merchant-category patterns
+--   surfaced by gold.typology_exposure (see 06_sherlock/08_typology_sweep.sql).

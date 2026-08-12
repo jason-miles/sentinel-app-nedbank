@@ -1,0 +1,151 @@
+{
+ "version": 2,
+ "config": {
+  "sample_questions": [
+   {
+    "question": [
+     "Who has sanctions or watchlist hits, ordered by confidence?"
+    ]
+   },
+   {
+    "question": [
+     "Which customers have the highest perpetual-KYC risk score?"
+    ]
+   },
+   {
+    "question": [
+     "How many customers require EDD review by risk band?"
+    ]
+   },
+   {
+    "question": [
+     "Show the strongest behavioural peer-group anomalies by anomaly_score"
+    ]
+   },
+   {
+    "question": [
+     "How many fraud alerts by type and severity?"
+    ]
+   },
+   {
+    "question": [
+     "How many cases by scenario and team?"
+    ]
+   },
+   {
+    "question": [
+     "Which customers' actual turnover is far above what they declared?"
+    ]
+   },
+   {
+    "question": [
+     "Which accounts match the gaming/TPP layering typology but never alerted?"
+    ]
+   },
+   {
+    "question": [
+     "What is the case volume and average investigation hours by team?"
+    ]
+   },
+   {
+    "question": [
+     "List the top customers by dynamic risk who require enhanced due diligence"
+    ]
+   },
+   {
+    "question": [
+     "Which scenarios have the most critical-priority cases?"
+    ]
+   }
+  ],
+  "instructions": [
+   {
+    "title": "note_1",
+    "instruction": "Nedbank Sentinel is an AML/financial-crime platform. Answer over the gold marts. Glossary: SAR = Suspicious Activity Report; EDD = Enhanced Due Diligence; pKYC = perpetual KYC (continuously recomputed customer risk); PEP = politically exposed person; UBO = ultimate beneficial owner; typology = a money-laundering pattern (e.g. structuring, layering, smurfing)."
+   },
+   {
+    "title": "note_2",
+    "instruction": "Grain & joins: fraud_alerts is one row per alert (alert_type, severity, score 0-1, status). sherlock_cases is one row per investigation case (scenario, priority, status, team_name, analyst_name, risk_score, amount, days_open). Join alerts/cases to customers via entity: fraud_alerts.primary_entity_id -> entities.entity_id; customer_360.customer_id is the customer grain. sanctions_screening_hits and pkyc_customer_risk key on entity_id/customer_id."
+   },
+   {
+    "title": "note_3",
+    "instruction": "Severity values are 'critical','high','medium','low'. When asked for 'high risk', prefer severity in ('critical','high') or pkyc_customer_risk.risk_band='critical'. 'Fewer false positives' relates to the ml model, not these marts. Sanctions/watchlist hits: confidence in ('confirmed','probable','possible'); list_type e.g. 'sanctions','pep','adverse_media'."
+   }
+  ],
+  "curated_questions": [
+   {
+    "question": "Who has sanctions or watchlist hits?",
+    "answer": {
+     "sql": "SELECT entity_name, list_type, list_source, watch_name, confidence, match_score FROM elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_gold.sanctions_screening_hits ORDER BY CASE confidence WHEN 'confirmed' THEN 0 WHEN 'probable' THEN 1 ELSE 2 END, match_score DESC"
+    }
+   },
+   {
+    "question": "Which customers have the highest perpetual-KYC risk?",
+    "answer": {
+     "sql": "SELECT full_name, segment, country, dynamic_risk, risk_band, edd_review_required, sanction_hits, media_hits FROM elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_gold.pkyc_customer_risk ORDER BY dynamic_risk DESC LIMIT 25"
+    }
+   },
+   {
+    "question": "How many customers require EDD review by risk band?",
+    "answer": {
+     "sql": "SELECT risk_band, count(*) AS customers, sum(CASE WHEN edd_review_required THEN 1 ELSE 0 END) AS edd_required FROM elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_gold.pkyc_customer_risk GROUP BY risk_band ORDER BY customers DESC"
+    }
+   },
+   {
+    "question": "Show the strongest behavioural peer-group anomalies",
+    "answer": {
+     "sql": "SELECT full_name, segment, anomaly_score, z_txn_count, z_total_value, z_distinct_cps, explanation FROM elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_gold.peer_anomaly WHERE anomaly_score >= 2 ORDER BY anomaly_score DESC"
+    }
+   },
+   {
+    "question": "How many fraud alerts by type and severity?",
+    "answer": {
+     "sql": "SELECT alert_type, severity, count(*) AS alerts FROM elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_gold.fraud_alerts GROUP BY alert_type, severity ORDER BY alerts DESC"
+    }
+   },
+   {
+    "question": "How many cases by scenario and team?",
+    "answer": {
+     "sql": "SELECT scenario, team_name, count(*) AS cases FROM elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_gold.sherlock_cases GROUP BY scenario, team_name ORDER BY cases DESC"
+    }
+   }
+  ]
+ },
+ "data_sources": {
+  "tables": [
+   {
+    "identifier": "elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_gold.customer_360"
+   },
+   {
+    "identifier": "elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_gold.entity_network"
+   },
+   {
+    "identifier": "elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_gold.fraud_alerts"
+   },
+   {
+    "identifier": "elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_gold.peer_anomaly"
+   },
+   {
+    "identifier": "elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_gold.pkyc_customer_risk"
+   },
+   {
+    "identifier": "elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_gold.sanctions_screening_hits"
+   },
+   {
+    "identifier": "elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_gold.sherlock_cases"
+   },
+   {
+    "identifier": "elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_silver.entities"
+   },
+   {
+    "identifier": "elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_gold.typology_exposure"
+   },
+   {
+    "identifier": "elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_bronze.aml_knowledge"
+   },
+   {
+    "identifier": "elexon_app_for_settlement_acc_catalog.nedbank_fraud_aml_bronze.sar_narratives"
+   }
+  ]
+ }
+}

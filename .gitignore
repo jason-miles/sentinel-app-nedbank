@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+.env
+.DS_Store
+dist/
+build/
+*.log
+.venv_old_314/
+app/backend/.venv/
+app/backend/frontend/node_modules/
+app/backend/frontend/dist/
+app/backend/frontend/test-results/
+app/backend/frontend/playwright-report/
+app/backend/frontend/blob-report/
+app/backend/frontend/.playwright/
+
+# Databricks bundle/app local state
+.databricks/
+**/.databricks/

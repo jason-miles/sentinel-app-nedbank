@@ -1,0 +1,43 @@
+# Top-level Databricks Asset Bundle — unifies the whole Nedbank Sentinel deliverable
+# (Databricks App + Lakeflow detection pipeline + scheduled/triggered jobs) so a single
+# `databricks bundle deploy` ships everything and grants auto-apply. This removes the
+# manual `databricks sync` + `apps deploy` + `manage_uc_grants` steps from the build log.
+#
+# NOTE on migration: the pipeline + jobs already run from the nested
+# fraud_aml_pipeline/ bundle. This root bundle is the consolidation target
+# (NEXT_STEPS #6). Deploying it ADOPTS the existing app by name; cut the pipeline over
+# deliberately (deploy from here, then retire the nested bundle) rather than running
+# both bundles against the same resources.
+bundle:
+  name: nedbank_sentinel
+
+include:
+  - resources/*.yml
+  - fraud_aml_pipeline/resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog for the medallion
+    default: elexon_app_for_settlement_acc_catalog
+  schema:
+    description: Default (gold) schema for the pipeline
+    default: nedbank_fraud_aml_gold
+  app_warehouse_id:
+    description: Serving warehouse the app queries run on (elexon-anamoly-app)
+    default: d0305022e6c3db8e
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://fevm-elexon-app-for-settlement-acc.cloud.databricks.com
+
+  prod:
+    mode: production
+    workspace:
+      host: https://fevm-elexon-app-for-settlement-acc.cloud.databricks.com
+      root_path: /Workspace/Users/jason.miles@databricks.com/.bundle/${bundle.name}/${bundle.target}
+    permissions:
+      - user_name: jason.miles@databricks.com
+        level: CAN_MANAGE

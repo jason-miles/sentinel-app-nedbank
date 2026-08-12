@@ -1,0 +1,18 @@
+# Databricks App resource — bundle-deployed so the app ships alongside the pipeline
+# and job (removes the manual `databricks sync` + `apps deploy` + grant steps).
+#
+# The app name matches the already-deployed app (nedbank-fraud-aml) so the bundle
+# adopts it rather than creating a duplicate. source_code_path points at the backend
+# (which ships the built UI in webroot/).
+resources:
+  apps:
+    nedbank_sentinel_app:
+      name: nedbank-fraud-aml
+      description: "Nedbank Sentinel — CDP & Financial Crime Intelligence Platform"
+      source_code_path: ../app/backend
+      resources:
+        - name: sql-warehouse
+          description: "Serving warehouse for app queries"
+          sql_warehouse:
+            id: ${var.app_warehouse_id}
+            permission: CAN_USE

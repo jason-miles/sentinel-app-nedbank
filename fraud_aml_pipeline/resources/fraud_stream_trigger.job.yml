@@ -1,0 +1,30 @@
+# Near-real-time (self-driving) detection: a file-arrival triggered job that runs
+# the detection pipeline INCREMENTALLY whenever a new feed file lands in the
+# landing volume. This gives the "always-on" demo feel — drop a file, the alert
+# appears — WITHOUT the 24/7 cluster cost of continuous mode (right trade-off on a
+# shared FEVM workspace).
+#
+# It monitors the landing root, so BOTH streaming lanes (transactions/ and
+# card_transactions/) trigger the same run. full_refresh is false: the transaction
+# and card hot-paths have real dependency edges (silver -> in-pipeline streaming
+# table), so an incremental run orders correctly and only processes new files.
+#
+# min_time_between_triggers_seconds debounces bursts; wait_after_last_change lets a
+# multi-file batch settle before the run starts.
+resources:
+  jobs:
+    fraud_aml_stream_trigger:
+      name: nedbank_fraud_aml_stream_trigger
+      trigger:
+        file_arrival:
+          url: /Volumes/elexon_app_for_settlement_acc_catalog/nedbank_fraud_aml_bronze/landing/
+          min_time_between_triggers_seconds: 60
+          wait_after_last_change_seconds: 60
+      email_notifications:
+        on_failure:
+          - jason.miles@databricks.com
+      tasks:
+        - task_key: detect_incremental
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.fraud_aml_pipeline_etl.id}
+            full_refresh: false

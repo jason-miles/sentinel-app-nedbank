@@ -1,0 +1,36 @@
+# Scheduled retrain job for the SAR-propensity model (NEXT_STEPS #2 — ongoing
+# validation). Weekly cadence: rebuild features/labels, retrain + re-register the
+# model, re-score cases, and refresh the drift baseline/metrics. In production this
+# would instead be TRIGGERED when ml_drift_metrics reports a 'drift' verdict.
+#
+# NOTE: the training/scoring scripts require the serverless typing_extensions
+# path-fix documented in ml/train_sar_model.py; run them via a notebook/script task
+# that applies it. This resource wires the schedule + notification; the task points
+# at the retrain driver notebook (to be added to the workspace) — kept as a paused
+# schedule here so it never fires unattended on the shared workspace.
+resources:
+  jobs:
+    fraud_ml_retrain:
+      name: nedbank_fraud_ml_retrain
+      trigger:
+        periodic:
+          interval: 7
+          unit: DAYS
+      email_notifications:
+        on_failure:
+          - jason.miles@databricks.com
+        on_success:
+          - jason.miles@databricks.com
+      tasks:
+        - task_key: rebuild_features_labels
+          sql_task:
+            warehouse_id: ${var.app_warehouse_id}
+            file:
+              path: ../sql/05_intelligence/05_ml_features_labels.sql
+        - task_key: refresh_drift
+          depends_on:
+            - task_key: rebuild_features_labels
+          sql_task:
+            warehouse_id: ${var.app_warehouse_id}
+            file:
+              path: ../sql/05_intelligence/06_ml_drift_monitoring.sql
