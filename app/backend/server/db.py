@@ -15,6 +15,13 @@ from .config import get_workspace_client, CATALOG
 
 WAREHOUSE_ID = os.environ.get("FRAUD_WAREHOUSE_ID", "d0305022e6c3db8e")  # elexon-anamoly-app
 
+# Single source of truth for the Mosaic AI model endpoint used by every GenAI
+# surface (SAR multi-agent, triage, exec briefing, LLM-as-judge, Ask Sentinel
+# fallbacks). Env-configurable so the served model can be swapped — e.g. to a
+# newer Databricks foundation-model endpoint or a provisioned-throughput /
+# fine-tuned serving endpoint — with zero code changes across all routes.
+LLM_ENDPOINT = os.environ.get("FRAUD_LLM_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct")
+
 
 def _to_params(parameters: Optional[List[Dict]]):
     """Convert {name, value} dicts to typed StatementParameterListItem."""
@@ -63,3 +70,17 @@ def execute(sql: str, parameters: Optional[List[Dict]] = None) -> None:
     resp = _execute(sql, parameters)
     if resp.status.state != StatementState.SUCCEEDED:
         raise RuntimeError(f"SQL failed: {resp.status.error}")
+
+
+def ai_query(prompt: str) -> str:
+    """Run one Mosaic AI inference against LLM_ENDPOINT and return the text.
+
+    Single, safe entry point for every LLM call in the app. The prompt is always
+    BOUND as a parameter — never string-interpolated into the SQL literal (Spark
+    treats backslash as an escape char, so quote-doubling alone is injection-prone).
+    """
+    rows = fetch_all(
+        "SELECT ai_query(:model, :prompt) AS a",
+        [{"name": "model", "value": LLM_ENDPOINT}, {"name": "prompt", "value": prompt}],
+    )
+    return (rows[0]["a"] if rows else "") or ""

@@ -5,14 +5,12 @@ from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from ..db import fetch_all, execute
+from ..db import fetch_all, execute, ai_query
 from ..config import GOLD_SCHEMA, SILVER_SCHEMA
 from ..casestate import can_transition, transition_error
 from ..sla import sla_status
 
 router = APIRouter(prefix="/api/sherlock", tags=["sherlock"])
-
-LLM = "databricks-meta-llama-3-3-70b-instruct"
 
 
 def audit(action: str, actor: str = "system", case_id: str = "", detail: str = "",
@@ -309,12 +307,7 @@ FROM {GOLD_SCHEMA}.sherlock_cases WHERE case_id = :cid
                        f"priority {c['priority']}, risk score {c['risk_score']}, amount {c['amount']}, "
                        f"{c['days_open']} days open.")
     prompt = f"{persona}{context} Question: {q.question}. Answer in 3-4 sentences with a clear recommendation."
-    # Bind the prompt as a parameter (never interpolate untrusted text into SQL).
-    rows = fetch_all(
-        "SELECT ai_query(:model, :prompt) AS answer",
-        [{"name": "model", "value": LLM}, {"name": "prompt", "value": prompt}],
-    )
-    return {"agent": q.agent, "answer": rows[0]["answer"] if rows else ""}
+    return {"agent": q.agent, "answer": ai_query(prompt)}
 
 
 # ─────────────────────────── SAR generation ──────────────────────────────
@@ -339,10 +332,7 @@ FROM {GOLD_SCHEMA}.sherlock_cases WHERE case_id = :cid
         "Include: (1) summary of suspicious activity, (2) the pattern detected, "
         "(3) why it is suspicious, (4) recommended action. Keep it factual and professional."
     )
-    out = fetch_all(
-        "SELECT ai_query(:model, :prompt) AS narrative",
-        [{"name": "model", "value": LLM}, {"name": "prompt", "value": prompt}],
-    )
+    narrative = ai_query(prompt)
     return {
         "case_id": c["case_id"],
         "customer_name": c["customer_name"],
@@ -350,7 +340,7 @@ FROM {GOLD_SCHEMA}.sherlock_cases WHERE case_id = :cid
         "priority": c["priority"],
         "risk_score": c["risk_score"],
         "amount": c["amount"],
-        "narrative": out[0]["narrative"] if out else "",
+        "narrative": narrative,
     }
 
 

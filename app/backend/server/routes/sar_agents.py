@@ -21,7 +21,7 @@ from typing import Optional
 from fastapi import APIRouter, Response
 from pydantic import BaseModel
 
-from ..db import fetch_all
+from ..db import fetch_all, ai_query
 from ..config import CATALOG, GOLD_SCHEMA, SILVER_SCHEMA, get_workspace_client
 
 router = APIRouter(prefix="/api/sar", tags=["sar-agents"])
@@ -38,7 +38,6 @@ def _num(v, default: float = 0.0) -> float:
         return default
 
 
-LLM = "databricks-meta-llama-3-3-70b-instruct"
 ADVERSE_MEDIA_INDEX = f"{CATALOG}.{GOLD_SCHEMA}.adverse_media_index"
 AML_KNOWLEDGE_INDEX = f"{CATALOG}.{GOLD_SCHEMA}.aml_knowledge_index"
 
@@ -217,9 +216,7 @@ def _evidence_brief(ev: dict) -> str:
 def _agent(system: str, brief: str, task: str) -> str:
     prompt = (f"{system}\n\nShared case evidence: {brief}\n\nTask: {task} "
               "Be factual, cite the evidence above, 2-3 sentences.")
-    row = _one("SELECT ai_query(:m, :p) AS a",
-               [{"name": "m", "value": LLM}, {"name": "p", "value": prompt}])
-    return (row or {}).get("a", "") or ""
+    return ai_query(prompt)
 
 
 SPECIALISTS = [

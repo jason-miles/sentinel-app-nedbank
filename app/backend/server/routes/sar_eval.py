@@ -15,13 +15,11 @@ import uuid
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from ..db import fetch_all, execute
+from ..db import fetch_all, execute, ai_query, LLM_ENDPOINT
 from ..config import GOLD_SCHEMA
 from .sar_agents import orchestrate, OrchestrateReq
 
 router = APIRouter(prefix="/api/aml", tags=["sar-eval"])
-
-LLM = "databricks-meta-llama-3-3-70b-instruct"
 
 # SA ID numbers are 13 digits; tax numbers 10. Flag long bare digit runs as raw-PII.
 _PII_RE = re.compile(r"\b\d{10,13}\b")
@@ -39,9 +37,7 @@ def check_guardrail(narrative: str) -> tuple:
 
 def _judge(instruction: str) -> float:
     """Ask the judge model for a 0..1 score; parse leniently, clamp."""
-    row = fetch_all("SELECT ai_query(:m, :p) AS s",
-                    [{"name": "m", "value": LLM}, {"name": "p", "value": instruction}])
-    txt = (row[0]["s"] if row else "") or ""
+    txt = ai_query(instruction)
     m = re.search(r"(\d*\.?\d+)", txt)
     if not m:
         return 0.0
@@ -90,7 +86,7 @@ VALUES (:id, current_timestamp(), 'sar_narrative', :cid, :g, :c, :gp, :gn, :op, 
 """, [{"name": "id", "value": eid}, {"name": "cid", "value": req.case_id},
       {"name": "g", "value": str(groundedness)}, {"name": "c", "value": str(completeness)},
       {"name": "gp", "value": str(g_pass).lower()}, {"name": "gn", "value": g_note},
-      {"name": "op", "value": str(overall).lower()}, {"name": "model", "value": LLM}])
+      {"name": "op", "value": str(overall).lower()}, {"name": "model", "value": LLM_ENDPOINT}])
 
     return {"eval_id": eid, "case_id": req.case_id, "groundedness": groundedness,
             "completeness": completeness, "guardrail_pass": g_pass,

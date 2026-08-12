@@ -9,24 +9,13 @@ from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from ..db import fetch_all
+from ..db import fetch_all, ai_query
 from ..config import get_workspace_client, GOLD_SCHEMA
 
 router = APIRouter(prefix="/api/genai", tags=["genai"])
 
-LLM = "databricks-meta-llama-3-3-70b-instruct"
 GENIE_SPACE = os.environ.get("SENTINEL_GENIE_SPACE", "01f1962af9e61338a2c438fe01a7f352")
 
-
-def _aiq(prompt: str) -> str:
-    # Bind the prompt as a parameter — never string-interpolate untrusted/DB text
-    # into the SQL literal (Spark treats backslash as an escape char, so doubling
-    # quotes alone is insufficient and injection-prone).
-    rows = fetch_all(
-        "SELECT ai_query(:model, :prompt) AS a",
-        [{"name": "model", "value": LLM}, {"name": "prompt", "value": prompt}],
-    )
-    return rows[0]["a"] if rows else ""
 
 
 # ─────────────────────── Genie "Ask Sentinel" ────────────────────────────
@@ -95,7 +84,7 @@ def exec_briefing():
         f"Top scenarios: {top_scen}. Teams under pressure: {worst_team}. "
         "Highlight what's improving, what needs attention, and one recommended action."
     )
-    return {"briefing": _aiq(prompt), "kpis": kpi}
+    return {"briefing": ai_query(prompt), "kpis": kpi}
 
 
 # ─────────────────────── Per-case AI risk triage ─────────────────────────
@@ -119,7 +108,7 @@ FROM {GOLD_SCHEMA}.sherlock_cases WHERE case_id = :cid
         f"Case: customer {c['customer_name']}, scenario {c['scenario']}, rules risk {c['risk_score']}, "
         f"priority {c['priority']}, amount {c['amount']}, {c['days_open']} days open, team {c['team_name']}."
     )
-    return {"case_id": t.case_id, "triage": _aiq(prompt), "rules_risk": c["risk_score"]}
+    return {"case_id": t.case_id, "triage": ai_query(prompt), "rules_risk": c["risk_score"]}
 
 
 # ─────────────────────── Smart prioritization blurb ──────────────────────
@@ -141,4 +130,4 @@ FROM {GOLD_SCHEMA}.sherlock_cases WHERE case_id = :cid
         f"Scenario {c['scenario']}, risk {c['risk_score']}, priority {c['priority']}, "
         f"amount {c['amount']}, {c['days_open']} days open, customer {c['customer_name']}."
     )
-    return {"case_id": b.case_id, "blurb": _aiq(prompt)}
+    return {"case_id": b.case_id, "blurb": ai_query(prompt)}
