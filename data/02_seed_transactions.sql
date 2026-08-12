@@ -18,7 +18,7 @@ WITH acct AS (
 txn AS (
   SELECT a.account_id, a.acct_num, e.n AS txn_seq
   FROM acct a
-  LATERAL VIEW explode(sequence(1, cast(150 + pmod(a.acct_num, 120) AS INT))) e AS n
+  LATERAL VIEW explode(sequence(1, cast(30 + pmod(a.acct_num, 30) AS INT))) e AS n
 )
 SELECT
   concat('TXN', lpad(cast(acct_num * 1000 + txn_seq AS BIGINT), 12, '0')) AS transaction_id,
@@ -58,7 +58,7 @@ WITH cards AS (
 taps AS (
   SELECT c.account_id, c.acct_num, e.n AS tap_seq
   FROM cards c
-  LATERAL VIEW explode(sequence(1, cast(50 + pmod(c.acct_num, 60) AS INT))) e AS n
+  LATERAL VIEW explode(sequence(1, cast(20 + pmod(c.acct_num, 20) AS INT))) e AS n
 ),
 geo AS (
   SELECT *, pmod(acct_num + tap_seq, 5) AS gidx FROM taps

@@ -39,6 +39,13 @@ const STEPS: Step[] = [
     tip: "Graph Explorer — search “Motaung” (the aggregator). 7-account cluster + cross-border cash-out.",
   },
   {
+    title: "1 · Real-time detection",
+    beat: "DETECT",
+    route: "/investigation",
+    say: "Detection is live. Click “⚡ Simulate live transaction” on the queue: a fresh suspicious transaction streams in and a new critical alert lands at the top of the analyst's queue in seconds — no overnight batch. This is streaming detection on the Lakehouse.",
+    tip: "My Queue → ⚡ Simulate live transaction — a new critical case appears instantly.",
+  },
+  {
     title: "2 · STR drafted in seconds",
     beat: "DOCUMENT",
     route: "/sar/CASE-90001",
@@ -70,28 +77,42 @@ export function StoryMode() {
   const [i, setI] = useState(0);
   const nav = useNavigate();
 
+  // Auto-play: when playing and not paused, advance after the step's dwell time.
+  // Kiosk-friendly — reads the narration then moves on. Manual controls still work.
+  const AUTO_MS = 11000; // ~11s per beat (enough to read the narration)
+  const [paused, setPaused] = useState(false);
+
   // On each step, navigate to its route.
   useEffect(() => {
     if (!playing) return;
     nav(STEPS[i].route);
   }, [playing, i, nav]);
 
-  // Esc closes the story.
+  // Auto-advance timer (skipped when paused or on the last step).
+  useEffect(() => {
+    if (!playing || paused) return;
+    if (i >= STEPS.length - 1) return;
+    const t = setTimeout(() => setI((n) => Math.min(n + 1, STEPS.length - 1)), AUTO_MS);
+    return () => clearTimeout(t);
+  }, [playing, paused, i]);
+
+  // Esc closes; Space toggles pause; arrows step.
   useEffect(() => {
     if (!playing) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setPlaying(false);
-      if (e.key === "ArrowRight") setI((n) => Math.min(n + 1, STEPS.length - 1));
-      if (e.key === "ArrowLeft") setI((n) => Math.max(n - 1, 0));
+      if (e.key === " ") { e.preventDefault(); setPaused((p) => !p); }
+      if (e.key === "ArrowRight") { setPaused(true); setI((n) => Math.min(n + 1, STEPS.length - 1)); }
+      if (e.key === "ArrowLeft") { setPaused(true); setI((n) => Math.max(n - 1, 0)); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [playing]);
 
-  function start() { setI(0); setPlaying(true); }
+  function start() { setI(0); setPaused(false); setPlaying(true); }
   function stop() { setPlaying(false); }
-  function next() { if (i < STEPS.length - 1) setI(i + 1); else stop(); }
-  function prev() { setI(Math.max(0, i - 1)); }
+  function next() { setPaused(true); if (i < STEPS.length - 1) setI(i + 1); else stop(); }
+  function prev() { setPaused(true); setI(Math.max(0, i - 1)); }
 
   if (!playing) {
     return (
@@ -104,6 +125,10 @@ export function StoryMode() {
   return (
     <div className="story-overlay" role="dialog" aria-label="Guided demo" aria-live="polite">
       <div className="story-card">
+        {/* auto-advance progress bar (re-keys each step to restart the animation) */}
+        {!paused && i < STEPS.length - 1 && (
+          <div key={i} className="story-progress"><span style={{ animationDuration: `${AUTO_MS}ms` }} /></div>
+        )}
         <div className="story-head">
           <span className="story-beat" style={{ background: BEAT_COLOR[s.beat] }}>{s.beat}</span>
           <span className="story-step">Step {i + 1} / {STEPS.length}</span>
@@ -114,9 +139,13 @@ export function StoryMode() {
         {s.tip && <p className="story-tip">▸ {s.tip}</p>}
         <div className="story-controls">
           <button className="btn ghost sm" onClick={prev} disabled={i === 0}>◂ Back</button>
+          <button className="btn ghost sm" onClick={() => setPaused((p) => !p)}
+            title={paused ? "Resume auto-play" : "Pause"} aria-label={paused ? "Resume" : "Pause"}>
+            {paused ? "▶ Auto" : "❚❚ Pause"}
+          </button>
           <div className="story-dots">
             {STEPS.map((_, n) => (
-              <span key={n} className={`story-dot ${n === i ? "on" : ""}`} onClick={() => setI(n)} />
+              <span key={n} className={`story-dot ${n === i ? "on" : ""}`} onClick={() => { setPaused(true); setI(n); }} />
             ))}
           </div>
           <button className="btn sm" onClick={next}>{i < STEPS.length - 1 ? "Next ▸" : "Finish"}</button>

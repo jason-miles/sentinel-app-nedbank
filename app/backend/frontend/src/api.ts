@@ -71,6 +71,8 @@ export const getAudit = (limit = 100) => apiGet(`${A}/audit?limit=${limit}`);
 export const getAuditSummary = () => apiGet(`${A}/audit/summary`);
 // Impossible-travel alerts (geospatial card-tap velocity)
 export const getImpossibleTravel = () => apiGet(`/api/impossible-travel`);
+// Live-transaction simulation (real-time demo beat)
+export const simLiveAlert = () => apiPost(`/api/sim/live-alert`, {});
 
 // GenAI
 const G = "/api/genai";

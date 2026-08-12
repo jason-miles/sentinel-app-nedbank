@@ -288,3 +288,9 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--n
 .story-dots { display: flex; gap: 7px; margin: 0 auto; }
 .story-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); cursor: pointer; }
 .story-dot.on { background: var(--accent); }
+/* Story Mode auto-advance progress bar */
+.story-progress { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: transparent; overflow: hidden; border-radius: 10px 10px 0 0; }
+.story-progress > span { display: block; height: 100%; width: 100%; background: var(--accent); transform-origin: left; animation: story-fill linear forwards; }
+@keyframes story-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+/* Impossible-travel world map */
+.travel-map { width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 16px; background: var(--graph-bg); }

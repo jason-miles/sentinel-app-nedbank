@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { getQueue, casePrioritize } from "../api";
+import { getQueue, casePrioritize, simLiveAlert } from "../api";
 import { Sev, Loading, ErrorState, usePersona, num, money, LiveControls } from "../components/ui";
 
 // Nedbank tonal palette: deep-blue shades + signature red + muted blue-grey.
@@ -26,6 +26,24 @@ export function AlertInvestigation() {
   const [, setTick] = useState(0); // ticks so the "updated Ns ago" label stays fresh
   const [fPriority, setFPriority] = useState("");
   const [fScenario, setFScenario] = useState("");
+  const [simMsg, setSimMsg] = useState("");
+  const [simBusy, setSimBusy] = useState(false);
+
+  // Live-transaction demo beat: insert a fresh critical case, then refresh the queue
+  // so it visibly lands. Shows the "near-real-time" story without waiting on the pipeline.
+  async function simulate() {
+    setSimBusy(true); setSimMsg("");
+    try {
+      const r: any = await simLiveAlert();
+      setSimMsg(`⚡ New ${r.priority} alert: ${r.customer_name} — ${r.scenario} (R${Number(r.amount).toLocaleString()})`);
+      if (current) {
+        const d = await getQueue(current.analyst_id, fPriority, fScenario);
+        setData(d); setUpdatedAt(Date.now());
+      }
+    } catch { setSimMsg("Simulation unavailable."); }
+    setSimBusy(false);
+    setTimeout(() => setSimMsg(""), 9000);
+  }
 
   // Initial load (with spinner) whenever persona or filters change.
   const load = () => {
@@ -69,9 +87,16 @@ export function AlertInvestigation() {
     <>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <h1 className="page-title">My Queue — {current?.analyst_name}</h1>
-        <LiveControls live={live} updatedAt={updatedAt} onToggle={() => setLive((v) => !v)} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <button className="btn sm" onClick={simulate} disabled={simBusy}
+            title="Simulate a live incoming suspicious transaction">
+            {simBusy ? "Streaming…" : "⚡ Simulate live transaction"}
+          </button>
+          <LiveControls live={live} updatedAt={updatedAt} onToggle={() => setLive((v) => !v)} />
+        </div>
       </div>
       <p className="page-sub">{current?.team_name}</p>
+      {simMsg && <div className="explain" style={{ borderLeft: "3px solid var(--critical)", marginBottom: 16 }}>{simMsg}</div>}
 
       <div className="kpis">
         <div className="kpi"><div className="label"><span className="dot" style={{ background: "var(--critical)" }} />Critical</div><div className="value navy">{k.critical || 0}</div></div>

@@ -261,6 +261,46 @@ function Pkyc() {
   );
 }
 
+// Inline equirectangular world map (no deps): lon/lat -> x/y, with a graticule,
+// coastline-free but recognisable land boxes, city dots, and a red arc per alert.
+function TravelMap({ rows }: { rows: any[] }) {
+  const W = 720, H = 360;
+  const proj = (lat: number, lon: number) => [((lon + 180) / 360) * W, ((90 - lat) / 180) * H];
+  // Rough continent blocks (equirectangular) — enough to orient the eye without a map lib.
+  const LAND = [
+    [-170, 72, -52, 8], [-82, 12, -34, -56], [-12, 60, 40, 34], [-18, 37, 52, -35],
+    [26, 72, 190, 8], [92, -10, 155, -44],
+  ];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="travel-map" role="img" aria-label="Impossible-travel card taps on a world map">
+      <rect x="0" y="0" width={W} height={H} fill="var(--graph-bg)" />
+      {LAND.map(([w, n, e, s], k) => {
+        const [x1, y1] = proj(n, w); const [x2, y2] = proj(s, e);
+        return <rect key={k} x={x1} y={y1} width={x2 - x1} height={y2 - y1} rx="6" fill="var(--panel-2)" stroke="var(--border)" />;
+      })}
+      {[-120, -60, 0, 60, 120].map((lon) => <line key={`v${lon}`} x1={proj(0, lon)[0]} y1={0} x2={proj(0, lon)[0]} y2={H} stroke="var(--border)" strokeWidth="0.5" />)}
+      {[-60, -30, 0, 30, 60].map((lat) => <line key={`h${lat}`} x1={0} y1={proj(lat, 0)[1]} x2={W} y2={proj(lat, 0)[1]} stroke="var(--border)" strokeWidth="0.5" />)}
+      {rows.map((r) => {
+        const legs = r.legs || []; if (legs.length < 2) return null;
+        const [ax, ay] = proj(Number(legs[0].lat), Number(legs[0].lon));
+        const [bx, by] = proj(Number(legs[1].lat), Number(legs[1].lon));
+        const mx = (ax + bx) / 2, my = Math.min(ay, by) - 40; // arc control point
+        return (
+          <g key={r.alert_id}>
+            <path d={`M ${ax} ${ay} Q ${mx} ${my} ${bx} ${by}`} fill="none" stroke="var(--critical)" strokeWidth="1.6" opacity="0.8" />
+            {[[ax, ay, legs[0].city], [bx, by, legs[1].city]].map(([x, y, city]: any, k) => (
+              <g key={k}>
+                <circle cx={x} cy={y} r="4" fill="var(--critical)" />
+                <text x={x + 6} y={y - 5} fontSize="9" fill="var(--text)">{city}</text>
+              </g>
+            ))}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 function ImpossibleTravel() {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -273,6 +313,7 @@ function ImpossibleTravel() {
     <div className="panel">
       <h3 className="left">Impossible Travel — one card tapped in two places too far apart to be physical</h3>
       <p className="muted" style={{ marginTop: 0 }}>Geospatial velocity on card taps (haversine km ÷ elapsed time). An implied speed above ~900 km/h can't be a real journey — a strong card-compromise / cloning signal.</p>
+      {rows.length > 0 && <TravelMap rows={rows} />}
       {rows.length === 0 && <span className="muted">No impossible-travel alerts.</span>}
       {rows.map((r) => {
         const legs = r.legs || [];

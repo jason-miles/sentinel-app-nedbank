@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from server.routes import alerts, network, customers, travel, sherlock, genai, advanced_aml, sar_agents, sar_eval
+from server.routes import alerts, network, customers, travel, sherlock, genai, advanced_aml, sar_agents, sar_eval, sim
 
 app = FastAPI(title="SherlockAML — Nedbank", version="0.2.0")
 
@@ -31,6 +31,7 @@ app.include_router(genai.router)
 app.include_router(advanced_aml.router)
 app.include_router(sar_agents.router)
 app.include_router(sar_eval.router)
+app.include_router(sim.router)
 
 
 @app.get("/api/health")
