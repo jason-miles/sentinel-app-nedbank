@@ -26,3 +26,10 @@ env:
     value: "01f1962b09fc173296fdc15c62aefb4e"
   - name: DATABRICKS_HOST
     value: "https://fevm-elexon-app-for-settlement-acc.cloud.databricks.com"
+  # Mosaic AI model endpoint for every GenAI surface (SAR multi-agent, triage,
+  # exec briefing, LLM-as-judge). Upgraded from meta-llama-3-3-70b to Anthropic
+  # Claude Sonnet 4.5 for stronger grounded reasoning + regulator-ready SAR
+  # narratives. Single source of truth (server/db.py reads this) — swap the model
+  # here, no code change.
+  - name: FRAUD_LLM_ENDPOINT
+    value: "databricks-claude-sonnet-4-5"
