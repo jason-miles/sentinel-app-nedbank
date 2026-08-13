@@ -21,6 +21,7 @@ from typing import Optional
 from fastapi import APIRouter, Response
 from pydantic import BaseModel
 
+from fastapi import HTTPException
 from ..db import fetch_all, ai_query
 from ..config import CATALOG, GOLD_SCHEMA, SILVER_SCHEMA, get_workspace_client
 
@@ -246,7 +247,7 @@ def evidence(case_id: str):
     (3 specialists + supervisor, ~6s of ai_query) runs in the background."""
     ev = gather_evidence(case_id)
     if not ev:
-        return {"detail": "not found"}
+        raise HTTPException(status_code=404, detail="not found")
     c = ev["case"]
     return {
         "case_id": c["case_id"], "customer_name": c["customer_name"],
@@ -266,7 +267,7 @@ def orchestrate(req: OrchestrateReq):
     """Run the full multi-agent SAR workflow with auto-gathered evidence."""
     ev = gather_evidence(req.case_id)
     if not ev:
-        return {"detail": "not found"}
+        raise HTTPException(status_code=404, detail="not found")
     brief = _evidence_brief(ev)
 
     # The 3 specialist agents are independent — only the supervisor needs all of

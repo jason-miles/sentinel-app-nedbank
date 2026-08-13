@@ -58,22 +58,28 @@ class EvalReq(BaseModel):
 def run_eval(req: EvalReq):
     """Generate a SAR for the case, then evaluate it (judges + guardrail) and record."""
     result = orchestrate(OrchestrateReq(case_id=req.case_id))
-    if not result or "narrative" not in result:
-        return {"detail": "not found"}
     narrative = result.get("narrative", "")
     # Reuse the brief orchestrate already built — avoids a second evidence gather
     # (extra vector-search + SQL reads).
     brief = result.get("evidence_brief", "")
 
-    groundedness = _judge(
-        "You are an AML SAR quality judge. On a 0..1 scale, how well is the SAR "
-        "narrative SUPPORTED BY the case evidence (no unsupported claims)? Reply with "
-        f"just the number.\n\nEvidence: {brief}\n\nNarrative: {narrative}")
-    completeness = _judge(
-        "You are an AML SAR quality judge. On a 0..1 scale, does this narrative cover "
-        "all FOUR required sections — (1) summary of suspicious activity, (2) the "
-        "pattern detected, (3) why it is suspicious, (4) recommended action? Reply "
-        f"with just the number.\n\nNarrative: {narrative}")
+    # The two judges are independent LLM round-trips — run them concurrently (like
+    # the specialist agents) so the eval takes one ai_query latency, not two.
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        f_ground = pool.submit(
+            _judge,
+            "You are an AML SAR quality judge. On a 0..1 scale, how well is the SAR "
+            "narrative SUPPORTED BY the case evidence (no unsupported claims)? Reply with "
+            f"just the number.\n\nEvidence: {brief}\n\nNarrative: {narrative}")
+        f_complete = pool.submit(
+            _judge,
+            "You are an AML SAR quality judge. On a 0..1 scale, does this narrative cover "
+            "all FOUR required sections — (1) summary of suspicious activity, (2) the "
+            "pattern detected, (3) why it is suspicious, (4) recommended action? Reply "
+            f"with just the number.\n\nNarrative: {narrative}")
+    groundedness = f_ground.result()
+    completeness = f_complete.result()
     g_pass, g_note = check_guardrail(narrative)
     overall = bool(g_pass and groundedness >= 0.6 and completeness >= 0.6)
 

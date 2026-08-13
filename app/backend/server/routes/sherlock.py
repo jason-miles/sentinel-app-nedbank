@@ -1,16 +1,19 @@
 """SherlockAML endpoints — personas, executive analytics, investigation queues,
 case actions, multi-agent assistant, SAR generation, and graph explorer."""
+import logging
 import uuid
 from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
 from ..db import fetch_all, execute, ai_query
+from ..http import fetch_one_or_404
 from ..config import GOLD_SCHEMA, SILVER_SCHEMA
 from ..casestate import can_transition, transition_error
 from ..sla import sla_status
 
 router = APIRouter(prefix="/api/sherlock", tags=["sherlock"])
+log = logging.getLogger("sentinel.sherlock")
 
 
 def audit(action: str, actor: str = "system", case_id: str = "", detail: str = "",
@@ -26,8 +29,8 @@ VALUES (:id, current_timestamp(), :actor, :role, :action, :cid, :detail, :src)
       {"name": "role", "value": actor_role}, {"name": "action", "value": action},
       {"name": "cid", "value": case_id}, {"name": "detail", "value": detail},
       {"name": "src", "value": source}])
-    except Exception:
-        pass
+    except Exception as e:  # best-effort, but surface it so a broken audit path is visible
+        log.warning("audit INSERT failed (action=%s case=%s): %s", action, case_id, e)
 
 
 # ─────────────────────────── Personas ────────────────────────────────────
@@ -134,7 +137,7 @@ def case_detail(case_id: str, actor: str = "Sarah Chen"):
     """Investigation page: case, flagged transactions, entity network, notes, actions."""
     audit("case_open", actor=actor, case_id=case_id, detail="Opened case investigation", source="investigation")
     p = [{"name": "cid", "value": case_id}]
-    rows = fetch_all(f"""
+    case = fetch_one_or_404(f"""
 SELECT c.case_id, c.alert_num, c.customer_id, c.customer_name, c.scenario, c.priority, c.status,
        c.team_name, c.analyst_name, c.risk_score, c.amount, c.days_open, c.due_date, c.investigation_hours,
        -- Served-model AI risk (replaces the old ai_query placeholder): the registered
@@ -145,9 +148,6 @@ FROM {GOLD_SCHEMA}.sherlock_cases c
 LEFT JOIN {GOLD_SCHEMA}.ml_alert_scores s ON s.case_id = c.case_id
 WHERE c.case_id = :cid
 """, p)
-    if not rows:
-        return {"detail": "not found"}
-    case = rows[0]
     cust = case.get("customer_id")
     # flagged transactions for this customer's accounts
     txns = fetch_all(f"""
@@ -317,13 +317,10 @@ class SarGen(BaseModel):
 
 @router.post("/sar/generate")
 def sar_generate(s: SarGen):
-    rows = fetch_all(f"""
+    c = fetch_one_or_404(f"""
 SELECT case_id, customer_name, scenario, priority, risk_score, amount, days_open, team_name
 FROM {GOLD_SCHEMA}.sherlock_cases WHERE case_id = :cid
 """, [{"name": "cid", "value": s.case_id}])
-    if not rows:
-        return {"detail": "not found"}
-    c = rows[0]
     prompt = (
         "Draft a concise, regulator-ready Suspicious Activity Report (SAR) narrative "
         f"for the following AML case. Customer: {c['customer_name']}. Detection scenario: {c['scenario']}. "

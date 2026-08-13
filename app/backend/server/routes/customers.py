@@ -2,6 +2,7 @@
 from typing import Optional
 from fastapi import APIRouter
 from ..db import fetch_all
+from ..http import fetch_one_or_404
 from ..config import GOLD_SCHEMA
 
 router = APIRouter(prefix="/api", tags=["customers"])
@@ -23,12 +24,9 @@ LIMIT {int(limit)}
 @router.get("/customers/{customer_id}")
 def customer_detail(customer_id: str):
     """Single customer 360 profile + their alerts + adverse-media analysis."""
-    prof = fetch_all(f"""
+    profile = fetch_one_or_404(f"""
 SELECT * FROM {GOLD_SCHEMA}.customer_360 WHERE customer_id = :cid
 """, [{"name": "cid", "value": customer_id}])
-    if not prof:
-        return {"detail": "not found"}
-    profile = prof[0]
     eid = profile.get("entity_id")
     alerts = fetch_all(f"""
 SELECT alert_id, alert_type, severity, triggered_at, score, explanation

@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from ..db import fetch_all, ai_query
+from ..http import fetch_one_or_404
 from ..config import get_workspace_client, GOLD_SCHEMA
 
 router = APIRouter(prefix="/api/genai", tags=["genai"])
@@ -94,13 +95,10 @@ class Triage(BaseModel):
 
 @router.post("/triage")
 def triage(t: Triage):
-    rows = fetch_all(f"""
+    c = fetch_one_or_404(f"""
 SELECT customer_name, scenario, priority, status, risk_score, amount, days_open, team_name
 FROM {GOLD_SCHEMA}.sherlock_cases WHERE case_id = :cid
 """, [{"name": "cid", "value": t.case_id}])
-    if not rows:
-        return {"detail": "not found"}
-    c = rows[0]
     prompt = (
         "You are an AML triage AI. Given this case, output exactly three short labelled lines: "
         "'AI Risk: <0-100>', 'Recommendation: <escalate|file SAR|dismiss|enhanced monitoring>', "
@@ -118,13 +116,10 @@ class Blurb(BaseModel):
 
 @router.post("/prioritize")
 def prioritize(b: Blurb):
-    rows = fetch_all(f"""
+    c = fetch_one_or_404(f"""
 SELECT customer_name, scenario, priority, risk_score, amount, days_open
 FROM {GOLD_SCHEMA}.sherlock_cases WHERE case_id = :cid
 """, [{"name": "cid", "value": b.case_id}])
-    if not rows:
-        return {"detail": "not found"}
-    c = rows[0]
     prompt = (
         "In ONE sentence, tell an AML analyst why this alert matters and the single best next step. "
         f"Scenario {c['scenario']}, risk {c['risk_score']}, priority {c['priority']}, "

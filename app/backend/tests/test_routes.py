@@ -84,3 +84,13 @@ def test_queue_filters_bind_safely(monkeypatch):
     sql, params = active[-1]
     assert all(x["name"] != "prio" for x in params)
     assert ":prio" not in sql
+
+
+def test_missing_record_returns_404(monkeypatch):
+    """A single-record GET for a non-existent id must return HTTP 404 (not a 200
+    body of {"detail": "not found"}), so the client's fetch wrapper routes it to
+    its error state. Guards the fetch_one_or_404 refactor."""
+    monkeypatch.setattr(db, "fetch_all", lambda sql, params=None: [])
+    c = TestClient(app_module.app)
+    assert c.get("/api/customers/NOPE").status_code == 404
+    assert c.get("/api/alerts/NOPE").status_code == 404

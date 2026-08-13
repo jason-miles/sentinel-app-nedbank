@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from ..db import fetch_all, execute
+from ..http import fetch_one_or_404
 from ..config import GOLD_SCHEMA
 
 router = APIRouter(prefix="/api", tags=["alerts"])
@@ -75,7 +76,7 @@ FROM {GOLD_SCHEMA}.fraud_alerts
 @router.get("/alerts/{alert_id}")
 def alert_detail(alert_id: str):
     """Full alert detail incl. evidence map + entity + latest feedback (page 2)."""
-    rows = fetch_all(f"""
+    alert = fetch_one_or_404(f"""
 {_EFFECTIVE_STATUS_CTE}
 SELECT fa.alert_id, fa.alert_type, fa.severity, fa.primary_entity_id, fa.related_entity_ids,
        fa.account_ids, fa.transaction_ids, fa.triggered_at, fa.score, fa.explanation,
@@ -84,9 +85,6 @@ FROM {GOLD_SCHEMA}.fraud_alerts fa
 LEFT JOIN latest_fb fb ON fb.alert_id = fa.alert_id
 WHERE fa.alert_id = :alert_id
 """, [{"name": "alert_id", "value": alert_id}])
-    if not rows:
-        return {"detail": "not found"}
-    alert = rows[0]
     fb = fetch_all(f"""
 SELECT status, analyst_feedback, analyst, created_at
 FROM {GOLD_SCHEMA}.alert_feedback

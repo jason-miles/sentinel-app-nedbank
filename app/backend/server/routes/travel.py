@@ -21,38 +21,54 @@ FROM {GOLD_SCHEMA}.fraud_alerts
 WHERE alert_type = 'impossible_travel'
 ORDER BY triggered_at DESC
 """)
-    # Reconstruct the exact consecutive tap pair that breached the speed
-    # threshold for each alert (mirrors detect_impossible_travel), rather than
-    # "the 2 most recent taps" — so the drawn journey matches the alert even
-    # when the card has later legitimate taps. Match on the arriving tap whose
-    # timestamp equals the alert's triggered_at to the second (avoids the
-    # micro/millisecond-precision mismatch between the stored TS and the API TS).
-    for a in alerts:
-        acct = a.get("account_id")
-        if acct and a.get("triggered_at"):
-            a["legs"] = fetch_all(f"""
+    if not alerts:
+        return alerts
+
+    # Reconstruct the exact consecutive tap pair that breached the speed threshold
+    # for each alert (mirrors detect_impossible_travel) — the arriving tap whose
+    # timestamp equals the alert's triggered_at to the second (avoids the micro/
+    # millisecond-precision mismatch between the stored TS and the API TS). ONE
+    # windowed query joined to every alert, instead of the old query-per-alert
+    # (N+1): a single warehouse round-trip regardless of alert count.
+    ids = [a["account_id"] for a in alerts if a.get("account_id")]
+    legs_by_alert: dict = {}
+    if ids:
+        binds = [{"name": f"a{i}", "value": v} for i, v in enumerate(ids)]
+        in_list = ", ".join(f":a{i}" for i in range(len(ids)))
+        rows = fetch_all(f"""
 WITH ordered AS (
-  SELECT city, country, lat, lon, txn_ts, merchant,
-         lag(city)     OVER (PARTITION BY account_id ORDER BY txn_ts) AS prev_city,
-         lag(country)  OVER (PARTITION BY account_id ORDER BY txn_ts) AS prev_country,
-         lag(lat)      OVER (PARTITION BY account_id ORDER BY txn_ts) AS prev_lat,
-         lag(lon)      OVER (PARTITION BY account_id ORDER BY txn_ts) AS prev_lon,
-         lag(txn_ts)   OVER (PARTITION BY account_id ORDER BY txn_ts) AS prev_ts,
-         lag(merchant) OVER (PARTITION BY account_id ORDER BY txn_ts) AS prev_merchant
+  SELECT account_id, city, country, lat, lon, txn_ts, merchant,
+         lag(city)     OVER w AS prev_city,
+         lag(country)  OVER w AS prev_country,
+         lag(lat)      OVER w AS prev_lat,
+         lag(lon)      OVER w AS prev_lon,
+         lag(txn_ts)   OVER w AS prev_ts,
+         lag(merchant) OVER w AS prev_merchant
   FROM {SILVER_SCHEMA}.card_transactions
-  WHERE account_id = :acct
+  WHERE account_id IN ({in_list})
+  WINDOW w AS (PARTITION BY account_id ORDER BY txn_ts)
 ),
 hit AS (
-  SELECT * FROM ordered
-  WHERE prev_ts IS NOT NULL
-    AND date_trunc('SECOND', txn_ts) = date_trunc('SECOND', CAST(:trig AS TIMESTAMP))
-  LIMIT 1
+  SELECT a.alert_id, o.*
+  FROM {GOLD_SCHEMA}.fraud_alerts a
+  JOIN ordered o
+    ON o.account_id = a.account_ids[0]
+   AND o.prev_ts IS NOT NULL
+   AND date_trunc('SECOND', o.txn_ts) = date_trunc('SECOND', a.triggered_at)
+  WHERE a.alert_type = 'impossible_travel'
 )
--- legs[0] = arriving tap (destination), legs[1] = departing tap (origin).
-SELECT city, country, lat, lon, txn_ts, merchant FROM hit
+-- leg_order 0 = arriving tap (destination), 1 = departing tap (origin).
+SELECT alert_id, 0 AS leg_order, city, country, lat, lon, txn_ts, merchant FROM hit
 UNION ALL
-SELECT prev_city, prev_country, prev_lat, prev_lon, prev_ts, prev_merchant FROM hit
-""", [{"name": "acct", "value": acct}, {"name": "trig", "value": str(a["triggered_at"])}])
+SELECT alert_id, 1 AS leg_order, prev_city, prev_country, prev_lat, prev_lon, prev_ts, prev_merchant FROM hit
+ORDER BY alert_id, leg_order
+""", binds)
+        for r in rows:
+            leg = {k: r[k] for k in ("city", "country", "lat", "lon", "txn_ts", "merchant")}
+            legs_by_alert.setdefault(r["alert_id"], []).append(leg)
+
+    for a in alerts:
+        a["legs"] = legs_by_alert.get(a["alert_id"], [])
     return alerts
 
 

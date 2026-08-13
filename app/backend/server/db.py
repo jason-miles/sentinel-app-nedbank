@@ -4,6 +4,7 @@ Reads/writes are governed by Unity Catalog and (in the app) stamped with the
 service-principal identity. Mirrors the Valterra OM Portal db layer.
 """
 import os
+import time
 from typing import Any, List, Dict, Optional
 from databricks.sdk.service.sql import (
     StatementState,
@@ -47,7 +48,6 @@ def _execute(sql: str, parameters: Optional[List[Dict]] = None) -> StatementResp
         catalog=CATALOG,
     )
     # Poll if the warehouse returned before the statement finished (long ai_query).
-    import time
     waited = 0.0
     while resp.status and resp.status.state in (StatementState.PENDING, StatementState.RUNNING) and waited < 120:
         time.sleep(2)
@@ -56,20 +56,34 @@ def _execute(sql: str, parameters: Optional[List[Dict]] = None) -> StatementResp
     return resp
 
 
+def _require_success(resp: StatementResponse) -> None:
+    """Raise a clear error unless the statement SUCCEEDED. Handles the case where
+    the poll loop gave up while the statement was still PENDING/RUNNING (>120s) —
+    resp.status(.state/.error) may then be None, so never dereference them blindly."""
+    state = resp.status.state if resp.status else None
+    if state != StatementState.SUCCEEDED:
+        err = (resp.status.error if resp.status else None) or f"statement did not complete (state={state})"
+        raise RuntimeError(f"SQL failed: {err}")
+
+
 def fetch_all(sql: str, parameters: Optional[List[Dict]] = None) -> List[Dict[str, Any]]:
     resp = _execute(sql, parameters)
-    if resp.status.state != StatementState.SUCCEEDED:
-        raise RuntimeError(f"SQL failed: {resp.status.error}")
-    if not resp.result or not resp.result.data_array:
+    _require_success(resp)
+    if not resp.result or not resp.result.data_array or not resp.manifest or not resp.manifest.schema:
         return []
     cols = [c.name for c in resp.manifest.schema.columns]
     return [dict(zip(cols, row)) for row in resp.result.data_array]
 
 
 def execute(sql: str, parameters: Optional[List[Dict]] = None) -> None:
-    resp = _execute(sql, parameters)
-    if resp.status.state != StatementState.SUCCEEDED:
-        raise RuntimeError(f"SQL failed: {resp.status.error}")
+    _require_success(_execute(sql, parameters))
+
+
+def fetch_one(sql: str, parameters: Optional[List[Dict]] = None) -> Optional[Dict[str, Any]]:
+    """Return the first row, or None. Shared so routes don't repeat the
+    fetch-then-index idiom (pairs with the fetch_one_or_404 API helper)."""
+    rows = fetch_all(sql, parameters)
+    return rows[0] if rows else None
 
 
 def ai_query(prompt: str) -> str:

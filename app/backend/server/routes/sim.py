@@ -7,6 +7,7 @@ path without requiring the app SP to write to the Auto Loader landing volume or
 trigger the Lakeflow pipeline (which needs extra privilege + a 1-2 min round-trip).
 The seeded scenario mirrors the WOW-A mule typology so the story stays coherent.
 """
+import logging
 import uuid
 from datetime import datetime
 from fastapi import APIRouter
@@ -14,6 +15,7 @@ from ..db import fetch_all, execute
 from ..config import GOLD_SCHEMA
 
 router = APIRouter(prefix="/api/sim", tags=["sim"])
+log = logging.getLogger("sentinel.sim")
 
 # Rotating synthetic subjects (clearly fake) for repeated demo runs.
 _SUBJECTS = [
@@ -38,8 +40,8 @@ WHERE case_id LIKE 'CASE-LIVE-%'
     SELECT case_id FROM {GOLD_SCHEMA}.sherlock_cases
     WHERE case_id LIKE 'CASE-LIVE-%' ORDER BY opened_at DESC LIMIT 2)
 """, [])
-    except Exception:
-        pass
+    except Exception as e:  # non-fatal: a failed prune shouldn't block the demo insert
+        log.warning("live-sim prune failed: %s", e)
     n = fetch_all(f"SELECT count(*) AS c FROM {GOLD_SCHEMA}.sherlock_cases")
     seq = int((n[0]["c"] if n else 0)) % len(_SUBJECTS)
     name, scenario, risk, amount = _SUBJECTS[seq]
@@ -66,7 +68,7 @@ INSERT INTO {GOLD_SCHEMA}.audit_log (event_ts, actor, action, case_id, detail, s
 VALUES (current_timestamp(), 'stream', 'live_alert', :cid, :d, 'realtime_feed')
 """, [{"name": "cid", "value": case_id},
       {"name": "d", "value": f"Live-streamed suspicious transaction — {scenario} (ZAR {amount:,.0f})"}])
-    except Exception:
-        pass
+    except Exception as e:  # audit is best-effort; the case insert already succeeded
+        log.warning("live-sim audit INSERT failed (case=%s): %s", case_id, e)
     return {"ok": True, "case_id": case_id, "customer_name": name, "scenario": scenario,
             "priority": "critical", "risk_score": risk, "amount": amount}
