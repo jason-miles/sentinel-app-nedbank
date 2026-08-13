@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
-import { PersonaProvider, usePersona } from "./components/ui";
+import { PersonaProvider, usePersona, SkelPage } from "./components/ui";
 import { BrandMark } from "./components/Logo";
 import { StoryMode } from "./components/StoryMode";
 
@@ -72,7 +72,7 @@ function Shell() {
       <a href="#main-content" className="skip-link">Skip to main content</a>
       <TopBar />
       <main id="main-content" className="page">
-        <Suspense fallback={<div className="route-loading" role="status" aria-live="polite">Loading…</div>}>
+        <Suspense fallback={<SkelPage />}>
           <Routes>
             <Route path="/exec" element={<ExecutiveOverview />} />
             <Route path="/investigation" element={<AlertInvestigation />} />

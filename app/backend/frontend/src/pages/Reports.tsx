@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getConfig } from "../api";
-import { Loading, ErrorState } from "../components/ui";
+import { ErrorState, SkelTable } from "../components/ui";
 
 export function Reports() {
   const [cfg, setCfg] = useState<any>(null);
@@ -8,7 +8,7 @@ export function Reports() {
   const [err, setErr] = useState(false);
   const load = () => { setErr(false); getConfig().then((c) => { setErr(false); setCfg(c); setLoading(false); }).catch(() => { setErr(true); setLoading(false); }); };
   useEffect(() => { load(); }, []);
-  if (loading) return <Loading what="reports" />;
+  if (loading) return <SkelTable rows={8} title="reports" />;
   if (err) return <ErrorState what="reports" onRetry={() => { setLoading(true); load(); }} />;
 
   const embed = cfg?.dashboard_embed_url;

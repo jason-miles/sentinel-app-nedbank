@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { sarEvidence, sarOrchestrate, sarSubmit, goamlUrl, goamlValidate } from "../api";
-import { Loading, usePersona, money } from "../components/ui";
+import { usePersona, money, SkelKpis, SkelTable } from "../components/ui";
 
 const AGENT_LABEL: Record<string, string> = {
   transaction_analysis: "Transaction Analysis",
@@ -49,7 +49,7 @@ export function SarFiling() {
 
   // Render as soon as the (fast) evidence pack is in — the slow agent workflow
   // streams into its own panels below, so the user never stares at a blank spinner.
-  if (!sar) return <Loading what="evidence pack" />;
+  if (!sar) return <div aria-busy="true"><SkelKpis n={4} /><SkelTable rows={6} /></div>;
 
   const ev = sar.evidence || {};
   return (

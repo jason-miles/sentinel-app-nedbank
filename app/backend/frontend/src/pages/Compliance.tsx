@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getScreening, getPkyc, getPkycSummary, getAnomalies, getModelGovernance, getModelDrift, getLlmEval, getAudit, getImpossibleTravel } from "../api";
-import { Loading, ErrorState, num, money } from "../components/ui";
+import { ErrorState, num, money, SkelTable, SkelKpis } from "../components/ui";
 
 function Badge({ s }: { s: string }) {
   const map: Record<string, string> = { confirmed: "critical", probable: "high", possible: "medium",
@@ -38,7 +38,7 @@ function AuditTrail() {
   const [err, setErr] = useState(false);
   const load = () => { setErr(false); getAudit(150).then((r) => { setErr(false); setRows(r); setLoading(false); }).catch(() => { setErr(true); setLoading(false); }); };
   useEffect(() => { load(); }, []);
-  if (loading) return <Loading what="audit trail" />;
+  if (loading) return <SkelTable rows={8} title="audit trail" />;
   if (err) return <ErrorState what="audit trail" onRetry={() => { setLoading(true); load(); }} />;
   const label: Record<string, string> = {
     case_open: "Case opened", note_add: "Note added", case_action: "Case action",
@@ -89,7 +89,7 @@ function ModelGovernance() {
       .catch(() => { setErr(true); setLoading(false); });
   };
   useEffect(() => { load(); }, []);
-  if (loading) return <Loading what="model validation record" />;
+  if (loading) return <div aria-busy="true"><SkelKpis n={4} /><SkelTable rows={5} /></div>;
   if (err) return <ErrorState what="model validation record" onRetry={() => { setLoading(true); load(); }} />;
   if (!m || m.model_version == null) return <p className="muted">No registered model metrics found. Train &amp; score the SAR model first.</p>;
   const pct = (x: any) => `${(num(x) * 100).toFixed(1)}%`;
@@ -181,7 +181,7 @@ function Screening() {
   const [err, setErr] = useState(false);
   const load = () => { setErr(false); getScreening("", 200).then((r) => { setErr(false); setRows(r); setLoading(false); }).catch(() => { setErr(true); setLoading(false); }); };
   useEffect(() => { load(); }, []);
-  if (loading) return <Loading what="screening hits" />;
+  if (loading) return <SkelTable rows={8} title="screening hits" />;
   if (err) return <ErrorState what="screening hits" onRetry={() => { setLoading(true); load(); }} />;
   const confirmed = rows.filter((r) => r.confidence === "confirmed").length;
   return (
@@ -226,7 +226,7 @@ function Pkyc() {
     Promise.all([getPkyc(20, 100), getPkycSummary()]).then(([r, s]) => { setErr(false); setRows(r); setSummary(s); setLoading(false); }).catch(() => { setErr(true); setLoading(false); });
   };
   useEffect(() => { load(); }, []);
-  if (loading) return <Loading what="perpetual KYC" />;
+  if (loading) return <SkelTable rows={8} title="perpetual KYC" />;
   if (err) return <ErrorState what="perpetual KYC" onRetry={() => { setLoading(true); load(); }} />;
   const band = (b: string) => num((summary?.bands || []).find((x: any) => x.risk_band === b)?.customers);
   const eddTotal = (summary?.bands || []).reduce((s: number, x: any) => s + num(x.edd_required), 0);
@@ -307,7 +307,7 @@ function ImpossibleTravel() {
   const [err, setErr] = useState(false);
   const load = () => { setErr(false); getImpossibleTravel().then((r) => { setRows(r); setLoading(false); }).catch(() => { setErr(true); setLoading(false); }); };
   useEffect(() => { load(); }, []);
-  if (loading) return <Loading what="impossible-travel alerts" />;
+  if (loading) return <SkelTable rows={6} title="impossible-travel alerts" />;
   if (err) return <ErrorState what="impossible-travel alerts" onRetry={() => { setLoading(true); load(); }} />;
   return (
     <div className="panel">
@@ -344,7 +344,7 @@ function Anomaly() {
   const [err, setErr] = useState(false);
   const load = () => { setErr(false); getAnomalies(100).then((r) => { setErr(false); setRows(r); setLoading(false); }).catch(() => { setErr(true); setLoading(false); }); };
   useEffect(() => { load(); }, []);
-  if (loading) return <Loading what="peer anomalies" />;
+  if (loading) return <SkelTable rows={8} title="peer anomalies" />;
   if (err) return <ErrorState what="peer anomalies" onRetry={() => { setLoading(true); load(); }} />;
   return (
     <>

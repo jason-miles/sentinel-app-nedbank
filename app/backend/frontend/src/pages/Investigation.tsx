@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { getCase, addNote, caseAction, agentChat, caseTriage, caseReassign } from "../api";
-import { Sev, Loading, ErrorState, usePersona, money, fmtDate, num } from "../components/ui";
+import { Sev, ErrorState, usePersona, money, fmtDate, num, SkelPage } from "../components/ui";
 import { SlaBadge } from "./AlertInvestigation";
 
 const AGENTS = [
@@ -22,7 +22,7 @@ export function Investigation() {
   const load = () => { setErr(false); return getCase(caseId!, current?.analyst_name).then(setC).catch(() => setErr(true)); };
   useEffect(() => { load(); }, [caseId, current?.analyst_id]);
   if (err && !c) return <ErrorState what="investigation" onRetry={load} />;
-  if (!c) return <Loading what="investigation" />;
+  if (!c) return <SkelPage kpis={5} rows={6} />;
 
   async function act(action: string) {
     await caseAction({ case_id: c.case_id, action, actor: current?.analyst_name });

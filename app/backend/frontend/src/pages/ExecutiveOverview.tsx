@@ -5,7 +5,7 @@ import {
 import {
   getExecKpis, getDailyNew, getOutstanding, getByScenario, getPriorityStatus, getTeamPerformance, execBriefing,
 } from "../api";
-import { Loading, ErrorState, num, LiveControls } from "../components/ui";
+import { ErrorState, num, LiveControls, SkelPage, SkelChart } from "../components/ui";
 
 const TEAL = "#006341";   // Nedbank signature green for primary series
 const GOLD = "#0a7a53";   // Nedbank green shade for secondary series
@@ -75,7 +75,7 @@ function AlertsOverview() {
     return () => clearInterval(id);
   }, []);
 
-  if (loading) return <Loading what="executive dashboard" />;
+  if (loading) return <SkelPage kpis={6} rows={5} />;
   if (err && !kpis) return <ErrorState what="executive dashboard" onRetry={() => { setLoading(true); refresh(); }} />;
 
   return (
@@ -196,7 +196,7 @@ function TeamPerformance() {
   const [err, setErr] = useState(false);
   const load = () => { setErr(false); getTeamPerformance().then((r) => { setRows(r); setLoading(false); }).catch(() => { setErr(true); setLoading(false); }); };
   useEffect(() => { load(); }, []);
-  if (loading) return <Loading what="team performance" />;
+  if (loading) return <SkelChart title="team performance" />;
   if (err) return <ErrorState what="team performance" onRetry={() => { setLoading(true); load(); }} />;
   const data = rows.map((r) => ({ team: r.team_name, hours: num(r.avg_hours), cases: num(r.cases), closed: num(r.closed), past_due: num(r.past_due) }));
   return (

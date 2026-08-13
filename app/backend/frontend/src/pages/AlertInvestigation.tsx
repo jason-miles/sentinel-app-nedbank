@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { getQueue, casePrioritize, simLiveAlert } from "../api";
-import { Sev, Loading, ErrorState, usePersona, num, money, LiveControls } from "../components/ui";
+import { Sev, ErrorState, usePersona, num, money, LiveControls, SkelPage } from "../components/ui";
 
 // Nedbank tonal palette: signature-green shades + muted sage.
 const SCEN_COLORS: Record<string, string> = {
@@ -76,7 +76,7 @@ export function AlertInvestigation() {
   }, []);
 
   if (err && !data) return <ErrorState what="my queue" onRetry={load} />;
-  if (loading || !data) return <Loading what="my queue" />;
+  if (loading || !data) return <SkelPage kpis={4} rows={7} />;
   const k = data.kpis || {};
 
   // pivot weekly -> stacked by scenario

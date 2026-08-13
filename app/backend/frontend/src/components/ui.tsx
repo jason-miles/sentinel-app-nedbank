@@ -7,6 +7,49 @@ export function Sev({ s }: { s: string }) {
 export function Loading({ what = "data" }: { what?: string }) {
   return <div className="loading">Loading {what}…</div>;
 }
+
+// ── Skeleton loaders ───────────────────────────────────────────────────────
+// Structured placeholders that mirror the real layout so a page reads as
+// "content arriving" instead of a blank screen — makes the demo feel instant.
+export function Skel({ w = "100%", h = 12, style = {} }: { w?: number | string; h?: number | string; style?: React.CSSProperties }) {
+  return <div className="skel" style={{ width: w, height: h, ...style }} aria-hidden="true" />;
+}
+export function SkelKpis({ n = 5 }: { n?: number }) {
+  return (
+    <div className="skel-kpis" role="status" aria-label="Loading metrics">
+      {Array.from({ length: n }).map((_, i) => (
+        <div className="skel-kpi" key={i}><Skel w={70} h={11} /><Skel w={90} h={28} /></div>
+      ))}
+    </div>
+  );
+}
+export function SkelTable({ rows = 6, title }: { rows?: number; title?: string }) {
+  return (
+    <div className="skel-panel" role="status" aria-label={`Loading ${title || "data"}`}>
+      {title ? <Skel w={180} h={16} style={{ marginBottom: 16 }} /> : null}
+      {Array.from({ length: rows }).map((_, i) => <div className="skel skel-row" key={i} aria-hidden="true" />)}
+    </div>
+  );
+}
+export function SkelChart({ title }: { title?: string }) {
+  return (
+    <div className="skel-panel" role="status" aria-label={`Loading ${title || "chart"}`}>
+      {title ? <Skel w={160} h={16} style={{ marginBottom: 16 }} /> : null}
+      <div className="skel skel-chart" aria-hidden="true" />
+    </div>
+  );
+}
+// Full-page queue/dashboard skeleton: KPI band + chart + table.
+export function SkelPage({ kpis = 5, rows = 6 }: { kpis?: number; rows?: number }) {
+  return (
+    <div aria-busy="true">
+      <Skel w={260} h={26} style={{ marginBottom: 22 }} />
+      <SkelKpis n={kpis} />
+      <SkelChart />
+      <SkelTable rows={rows} />
+    </div>
+  );
+}
 // Shown when a fetch fails — a clear message + inline Retry, never a blank panel.
 export function ErrorState({ what = "data", onRetry }: { what?: string; onRetry?: () => void }) {
   return (
