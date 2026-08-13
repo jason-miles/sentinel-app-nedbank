@@ -145,7 +145,6 @@ tr.clickable:hover { background: var(--canvas); cursor: pointer; }
 .kv { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--border); }
 .kv .k { color: var(--muted); }
 .muted { color: var(--muted); } .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
-.loading { color: var(--muted); padding: 46px; text-align: center; }
 input, textarea, select { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); padding: 10px 12px; font-size: 13px; font-family: inherit; }
 input:focus, textarea:focus, select:focus { outline: none; border-color: var(--navy); }
 .explain { background: var(--canvas); border-left: 2px solid var(--accent); padding: 14px 16px; border-radius: 2px; line-height: 1.6; }

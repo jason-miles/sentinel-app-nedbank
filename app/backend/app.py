@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from server.db import fetch_all, fire_and_forget
 from server.routes import alerts, network, customers, travel, sherlock, genai, advanced_aml, sar_agents, sar_eval, sim
@@ -34,6 +35,11 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="SherlockAML — Nedbank", version="0.2.0", lifespan=lifespan)
+
+# Compress JS/CSS/JSON responses over ~1KB (the Vite bundle + API payloads) so the
+# first paint ships far fewer bytes. Streaming AI responses are chunked text and
+# small, so gzip's minimum_size leaves them untouched.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # CORS for local dev (Vite :5173 -> FastAPI :8000). Harmless in the app.
 app.add_middleware(
@@ -75,6 +81,20 @@ def config():
             "dashboard_url": f"{host}/sql/dashboardsv3/{dash_id}" if host and dash_id else ""}
 
 
+# Vite content-hashes every filename under /assets (e.g. index-B_N4zydP.js), so a
+# given URL's bytes never change — serve them with a 1-year immutable cache so the
+# browser reuses them across navigations and repeat demos instead of re-fetching.
+class ImmutableStaticFiles(StaticFiles):
+    def is_not_modified(self, response_headers, request_headers) -> bool:  # type: ignore[override]
+        response_headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return super().is_not_modified(response_headers, request_headers)
+
+    async def get_response(self, path, scope):
+        resp = await super().get_response(path, scope)
+        resp.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
+        return resp
+
+
 # Serve React frontend. Built artifacts live in webroot/ (a copy of
 # frontend/dist under a name that `databricks sync` won't special-case, so the
 # built UI ships to the app). Fall back to frontend/dist for local dev.
@@ -83,7 +103,7 @@ FRONTEND_DIR = os.path.join(_HERE, "webroot")
 if not os.path.exists(FRONTEND_DIR):
     FRONTEND_DIR = os.path.join(_HERE, "frontend", "dist")
 if os.path.exists(FRONTEND_DIR):
-    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIR, "assets")), name="assets")
+    app.mount("/assets", ImmutableStaticFiles(directory=os.path.join(FRONTEND_DIR, "assets")), name="assets")
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
