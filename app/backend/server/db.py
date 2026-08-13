@@ -154,3 +154,43 @@ def ai_query(prompt: str) -> str:
         [{"name": "model", "value": LLM_ENDPOINT}, {"name": "prompt", "value": prompt}],
     )
     return (rows[0]["a"] if rows else "") or ""
+
+
+def ai_stream(prompt: str, system: str = "", max_tokens: int = 700):
+    """Yield the LLM answer token-by-token from LLM_ENDPOINT's chat completions
+    (SSE), so the UI can render text as it arrives instead of blocking on the whole
+    call. First token typically lands in ~2-3s vs ~5-6s for the full response.
+
+    Falls back to a single yield of the non-streamed answer if streaming fails, so
+    a caller never gets an empty panel.
+    """
+    import json
+    import httpx
+    w = get_workspace_client()
+    host = w.config.host.rstrip("/")
+    headers = {**w.config.authenticate(), "Content-Type": "application/json"}
+    url = f"{host}/serving-endpoints/{LLM_ENDPOINT}/invocations"
+    messages = ([{"role": "system", "content": system}] if system else []) + \
+               [{"role": "user", "content": prompt}]
+    body = {"messages": messages, "max_tokens": max_tokens, "stream": True}
+    try:
+        with httpx.stream("POST", url, headers=headers, json=body, timeout=90) as r:
+            r.raise_for_status()
+            for line in r.iter_lines():
+                if not line or not line.startswith("data: "):
+                    continue
+                payload = line[6:].strip()
+                if payload == "[DONE]":
+                    break
+                try:
+                    choices = json.loads(payload).get("choices") or [{}]
+                    delta = choices[0].get("delta", {}).get("content")
+                except (ValueError, KeyError, IndexError):
+                    continue
+                if delta:
+                    yield delta
+    except Exception:
+        # Streaming unavailable — degrade to a single non-streamed chunk.
+        text = ai_query((f"{system}\n\n" if system else "") + prompt)
+        if text:
+            yield text

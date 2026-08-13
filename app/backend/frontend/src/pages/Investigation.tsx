@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { getCase, addNote, caseAction, agentChat, caseTriage, caseReassign } from "../api";
+import { getCase, addNote, caseAction, agentChat, agentChatStream, caseTriage, caseTriageStream, caseReassign } from "../api";
 import { Sev, ErrorState, usePersona, money, fmtDate, num, SkelPage } from "../components/ui";
 import { SlaBadge } from "./AlertInvestigation";
 
@@ -151,18 +151,24 @@ function AiTriage({ caseId, rulesRisk }: { caseId: string; rulesRisk: any }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   async function run() {
-    setBusy(true);
-    try { const r = await caseTriage({ case_id: caseId }); setText(r.triage || ""); } catch { setText("Triage unavailable."); }
+    setBusy(true); setText("");
+    try {
+      // Stream tokens so the score + rationale type out live (first token ~2-3s).
+      await caseTriageStream({ case_id: caseId }, (soFar) => setText(soFar));
+    } catch {
+      try { const r = await caseTriage({ case_id: caseId }); setText(r.triage || ""); }
+      catch { setText("Triage unavailable."); }
+    }
     setBusy(false);
   }
   return (
     <div className="panel" style={{ borderLeft: "3px solid var(--accent)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h3 className="left" style={{ margin: 0 }}>✦ AI Risk Triage</h3>
-        <button className="btn sm" onClick={run} disabled={busy}>{busy ? "Scoring…" : "Run AI Triage"}</button>
+        <button className="btn sm" onClick={run} disabled={busy}>{busy && !text ? "Scoring…" : busy ? "Streaming…" : "Run AI Triage"}</button>
       </div>
       {text
-        ? <div className="explain" style={{ marginTop: 12, whiteSpace: "pre-line" }}>{text}</div>
+        ? <div className="explain" style={{ marginTop: 12, whiteSpace: "pre-line" }}>{text}{busy && <span className="stream-caret" />}</div>
         : <p className="muted" style={{ margin: "10px 0 0" }}>Rules-based risk is <strong>{rulesRisk}</strong>. Run AI triage for a model-augmented risk score, recommended action, and rationale.</p>}
     </div>
   );
@@ -177,12 +183,20 @@ function AgentPanel({ caseId }: { caseId: string }) {
   async function ask() {
     if (!q.trim() || busy) return;
     const question = q; setQ(""); setBusy(true);
-    setLog((l) => [...l, { who: "You", text: question, kind: "user" }]);
+    // Seed the user message + an empty AI bubble, then stream tokens into it.
+    let aiIdx = 0;
+    setLog((l) => { aiIdx = l.length + 1; return [...l, { who: "You", text: question, kind: "user" }, { who: `${agent} agent`, text: "", kind: "ai", streaming: true }]; });
+    const setAi = (t: string, streaming = true) =>
+      setLog((l) => l.map((m, i) => (i === aiIdx ? { ...m, text: t, streaming } : m)));
     try {
-      const r = await agentChat({ agent, question, case_id: caseId });
-      setLog((l) => [...l, { who: `${agent} agent`, text: r.answer, kind: "ai" }]);
+      await agentChatStream({ agent, question, case_id: caseId }, (soFar) => setAi(soFar, true));
     } catch {
-      setLog((l) => [...l, { who: "system", text: "Agent unavailable.", kind: "ai" }]);
+      try {
+        const r = await agentChat({ agent, question, case_id: caseId });
+        setAi(r.answer, false);
+      } catch { setAi("Agent unavailable.", false); }
+    } finally {
+      setLog((l) => l.map((m, i) => (i === aiIdx ? { ...m, streaming: false } : m)));
     }
     setBusy(false);
   }
@@ -198,9 +212,12 @@ function AgentPanel({ caseId }: { caseId: string }) {
       <div className="chat-log">
         {log.length === 0 && <div className="muted" style={{ fontSize: 13 }}>Ask the {agent} agent for guidance on this case. It scans the full network of case data and makes a recommendation.</div>}
         {log.map((m, i) => (
-          <div key={i} className={`msg ${m.kind}`}><div className="who">{m.who}</div>{m.text}</div>
+          <div key={i} className={`msg ${m.kind}`}>
+            <div className="who">{m.who}</div>
+            {m.text || (m.streaming ? <span className="muted">Analyzing…</span> : null)}
+            {m.streaming && m.text ? <span className="stream-caret" /> : null}
+          </div>
         ))}
-        {busy && <div className="msg ai"><div className="who">{agent} agent</div>Analyzing…</div>}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         <input aria-label="Ask the AI agent for guidance" style={{ flex: 1 }} placeholder="Ask for guidance…" value={q}

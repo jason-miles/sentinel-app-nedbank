@@ -9,8 +9,8 @@ from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from ..db import fetch_all, ai_query, parallel
-from ..http import fetch_one_or_404
+from ..db import fetch_all, ai_query, ai_stream, parallel
+from ..http import fetch_one_or_404, text_stream
 from ..config import get_workspace_client, GOLD_SCHEMA
 
 router = APIRouter(prefix="/api/genai", tags=["genai"])
@@ -102,14 +102,28 @@ def triage(t: Triage):
 SELECT customer_name, scenario, priority, status, risk_score, amount, days_open, team_name
 FROM {GOLD_SCHEMA}.sherlock_cases WHERE case_id = :cid
 """, [{"name": "cid", "value": t.case_id}])
-    prompt = (
+    return {"case_id": t.case_id, "triage": ai_query(_triage_prompt(c)), "rules_risk": c["risk_score"]}
+
+
+def _triage_prompt(c: dict) -> str:
+    return (
         "You are an AML triage AI. Given this case, output exactly three short labelled lines: "
         "'AI Risk: <0-100>', 'Recommendation: <escalate|file SAR|dismiss|enhanced monitoring>', "
         "'Rationale: <one sentence>'. "
         f"Case: customer {c['customer_name']}, scenario {c['scenario']}, rules risk {c['risk_score']}, "
         f"priority {c['priority']}, amount {c['amount']}, {c['days_open']} days open, team {c['team_name']}."
     )
-    return {"case_id": t.case_id, "triage": ai_query(prompt), "rules_risk": c["risk_score"]}
+
+
+@router.post("/triage/stream")
+def triage_stream(t: Triage):
+    """Streaming variant of /triage — tokens render as they arrive so the analyst
+    sees the risk score + rationale forming in ~2-3s instead of waiting ~5-6s."""
+    c = fetch_one_or_404(f"""
+SELECT customer_name, scenario, priority, status, risk_score, amount, days_open, team_name
+FROM {GOLD_SCHEMA}.sherlock_cases WHERE case_id = :cid
+""", [{"name": "cid", "value": t.case_id}])
+    return text_stream(ai_stream(_triage_prompt(c), max_tokens=300))
 
 
 # ─────────────────────── Smart prioritization blurb ──────────────────────

@@ -96,6 +96,19 @@ def test_missing_record_returns_404(monkeypatch):
     assert c.get("/api/alerts/NOPE").status_code == 404
 
 
+def test_triage_stream_streams_tokens(monkeypatch):
+    """/api/genai/triage/stream returns the streamed text via a text/plain body."""
+    monkeypatch.setattr(db, "fetch_all", lambda sql, params=None: [{
+        "customer_name": "Test", "scenario": "Cash Structuring Detection", "priority": "high",
+        "status": "new", "risk_score": 80, "amount": 74000, "days_open": 3, "team_name": "TM"}])
+    import server.routes.genai as g
+    monkeypatch.setattr(g, "ai_stream", lambda *a, **k: iter(["AI Risk: 88\n", "Recommendation: escalate"]))
+    c = TestClient(app_module.app)
+    r = c.post("/api/genai/triage/stream", json={"case_id": "CASE-1"})
+    assert r.status_code == 200
+    assert "AI Risk: 88" in r.text and "escalate" in r.text
+
+
 def test_parallel_helper_runs_and_orders():
     """parallel() runs callables concurrently and preserves result order."""
     import time as _t

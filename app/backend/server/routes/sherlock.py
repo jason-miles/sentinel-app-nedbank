@@ -6,8 +6,8 @@ from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from ..db import fetch_all, execute, ai_query, parallel, cached_fetch_all, fire_and_forget
-from ..http import fetch_one_or_404
+from ..db import fetch_all, execute, ai_query, ai_stream, parallel, cached_fetch_all, fire_and_forget
+from ..http import fetch_one_or_404, text_stream
 from ..config import GOLD_SCHEMA, SILVER_SCHEMA
 from ..casestate import can_transition, transition_error
 from ..sla import sla_status
@@ -320,8 +320,7 @@ class AgentChat(BaseModel):
     case_id: Optional[str] = None
 
 
-@router.post("/agent/chat")
-def agent_chat(q: AgentChat):
+def _agent_prompt(q: AgentChat) -> str:
     persona = AGENTS.get(q.agent, AGENTS["supervisor"])
     context = ""
     if q.case_id:
@@ -334,8 +333,18 @@ FROM {GOLD_SCHEMA}.sherlock_cases WHERE case_id = :cid
             context = (f" Case context: customer {c['customer_name']}, scenario {c['scenario']}, "
                        f"priority {c['priority']}, risk score {c['risk_score']}, amount {c['amount']}, "
                        f"{c['days_open']} days open.")
-    prompt = f"{persona}{context} Question: {q.question}. Answer in 3-4 sentences with a clear recommendation."
-    return {"agent": q.agent, "answer": ai_query(prompt)}
+    return f"{persona}{context} Question: {q.question}. Answer in 3-4 sentences with a clear recommendation."
+
+
+@router.post("/agent/chat")
+def agent_chat(q: AgentChat):
+    return {"agent": q.agent, "answer": ai_query(_agent_prompt(q))}
+
+
+@router.post("/agent/chat/stream")
+def agent_chat_stream(q: AgentChat):
+    """Streaming variant — the agent's answer types out live in the chat panel."""
+    return text_stream(ai_stream(_agent_prompt(q), max_tokens=500))
 
 
 # ─────────────────────────── SAR generation ──────────────────────────────

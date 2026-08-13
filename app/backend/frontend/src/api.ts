@@ -14,6 +14,27 @@ export async function apiPost<T = any>(path: string, body: unknown): Promise<T> 
   return res.json();
 }
 
+// POST that streams a text/plain body, invoking onChunk for each token batch as it
+// arrives. Powers the live-typing AI panels. Returns the full accumulated text.
+export async function apiPostStream(path: string, body: unknown, onChunk: (soFar: string) => void): Promise<string> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok || !res.body) throw new Error(`${path} -> ${res.status}`);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    text += decoder.decode(value, { stream: true });
+    onChunk(text);
+  }
+  return text;
+}
+
 const S = "/api/sherlock";
 // App config (dashboard embed etc.)
 export const getConfig = () => apiGet(`/api/config`);
@@ -43,6 +64,7 @@ export const caseTransition = (b: any) => apiPost(`${S}/case/transition`, b);
 export const caseReassign = (b: any) => apiPost(`${S}/case/reassign`, b);
 // Agent + SAR
 export const agentChat = (b: any) => apiPost(`${S}/agent/chat`, b);
+export const agentChatStream = (b: any, onChunk: (t: string) => void) => apiPostStream(`${S}/agent/chat/stream`, b, onChunk);
 export const sarGenerate = (b: any) => apiPost(`${S}/sar/generate`, b);
 export const sarSubmit = (b: any) => apiPost(`${S}/sar/submit`, b);
 export const sarEvidence = (caseId: string) =>
@@ -79,4 +101,5 @@ const G = "/api/genai";
 export const genieAsk = (b: any) => apiPost(`${G}/ask`, b);
 export const execBriefing = () => apiGet(`${G}/exec-briefing`);
 export const caseTriage = (b: any) => apiPost(`${G}/triage`, b);
+export const caseTriageStream = (b: any, onChunk: (t: string) => void) => apiPostStream(`${G}/triage/stream`, b, onChunk);
 export const casePrioritize = (b: any) => apiPost(`${G}/prioritize`, b);
