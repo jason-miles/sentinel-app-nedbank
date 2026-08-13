@@ -41,6 +41,7 @@ export const getConfig = () => apiGet(`/api/config`);
 // Personas
 export const getPersonas = () => apiGet(`${S}/personas`);
 // Executive
+export const getExecSummary = () => apiGet(`${S}/exec/summary`); // one call for the whole dashboard
 export const getExecKpis = () => apiGet(`${S}/exec/kpis`);
 export const getDailyNew = () => apiGet(`${S}/exec/daily-new`);
 export const getOutstanding = () => apiGet(`${S}/exec/outstanding`);

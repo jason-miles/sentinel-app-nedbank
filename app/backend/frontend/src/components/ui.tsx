@@ -4,10 +4,6 @@ import { getPersonas } from "../api";
 export function Sev({ s }: { s: string }) {
   return <span className={`badge sev-${s}`}>{s}</span>;
 }
-export function Loading({ what = "data" }: { what?: string }) {
-  return <div className="loading">Loading {what}…</div>;
-}
-
 // ── Skeleton loaders ───────────────────────────────────────────────────────
 // Structured placeholders that mirror the real layout so a page reads as
 // "content arriving" instead of a blank screen — makes the demo feel instant.

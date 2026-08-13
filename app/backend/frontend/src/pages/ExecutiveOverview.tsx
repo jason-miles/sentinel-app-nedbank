@@ -3,7 +3,7 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 import {
-  getExecKpis, getDailyNew, getOutstanding, getByScenario, getPriorityStatus, getTeamPerformance, execBriefing,
+  getExecSummary, getTeamPerformance, execBriefing,
 } from "../api";
 import { ErrorState, num, LiveControls, SkelPage, SkelChart } from "../components/ui";
 
@@ -52,14 +52,14 @@ function AlertsOverview() {
   const [, setTick] = useState(0);
 
   const refresh = () =>
-    Promise.all([getExecKpis(), getDailyNew(), getOutstanding(), getByScenario(), getPriorityStatus()])
-      .then(([k, d, o, s, p]) => {
+    getExecSummary()
+      .then((r: any) => {
         setErr(false);
-        setKpis(k);
-        setDaily(d.map((r: any) => ({ d: r.d, alerts: num(r.alerts) })));
-        setOutstanding(o.map((r: any) => ({ due: r.due_date, alerts: num(r.alerts) })));
-        setScenario(s.map((r: any) => ({ scenario: r.scenario, alerts: num(r.alerts) })));
-        setPs(p);
+        setKpis(r.kpis);
+        setDaily((r.daily_new || []).map((x: any) => ({ d: x.d, alerts: num(x.alerts) })));
+        setOutstanding((r.outstanding || []).map((x: any) => ({ due: x.due_date, alerts: num(x.alerts) })));
+        setScenario((r.by_scenario || []).map((x: any) => ({ scenario: x.scenario, alerts: num(x.alerts) })));
+        setPs(r.priority_status || []);
         setUpdatedAt(Date.now());
         setLoading(false);
       }).catch(() => { setErr(true); setLoading(false); });

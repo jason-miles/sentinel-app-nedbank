@@ -90,6 +90,17 @@ FROM {GOLD_SCHEMA}.sherlock_team_performance ORDER BY cases DESC
 """)
 
 
+@router.get("/exec/summary")
+def exec_summary():
+    """One call that returns every tile the executive dashboard needs. Fans the
+    (cached) reads out concurrently server-side, so the demo opener makes a single
+    request instead of five — faster first paint and 5× less polling traffic."""
+    kpis, daily, outstanding, by_scenario, priority_status = parallel(
+        exec_kpis, exec_daily_new, exec_outstanding, exec_by_scenario, exec_priority_status)
+    return {"kpis": kpis, "daily_new": daily, "outstanding": outstanding,
+            "by_scenario": by_scenario, "priority_status": priority_status}
+
+
 # ─────────────────────── Alert Investigation ─────────────────────────────
 _PRIORITIES = {"critical", "high", "medium", "low"}
 
