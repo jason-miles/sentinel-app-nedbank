@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from ..db import fetch_all, execute
+from ..db import fetch_all, execute, cached_fetch_all
 from ..http import fetch_one_or_404
 from ..config import GOLD_SCHEMA
 
@@ -58,19 +58,24 @@ LIMIT {int(limit)}
 
 @router.get("/alerts/summary")
 def alert_summary():
-    """Header tiles: counts by type + severity."""
-    by_type = fetch_all(f"""
+    """Header tiles: counts by type + severity. One GROUP BY ROLLUP query returns
+    both the per-type rows and the grand-total row (was two warehouse round-trips);
+    cached since it drives static header tiles a demo revisits repeatedly."""
+    rows = cached_fetch_all("alerts/summary", f"""
 SELECT alert_type, count(*) AS cnt,
-       sum(CASE WHEN severity='critical' THEN 1 ELSE 0 END) AS critical
-FROM {GOLD_SCHEMA}.fraud_alerts GROUP BY alert_type ORDER BY cnt DESC
-""")
-    totals = fetch_all(f"""
-SELECT count(*) AS total,
        sum(CASE WHEN severity='critical' THEN 1 ELSE 0 END) AS critical,
        count(DISTINCT primary_entity_id) AS entities
 FROM {GOLD_SCHEMA}.fraud_alerts
+GROUP BY ROLLUP(alert_type)
+ORDER BY (alert_type IS NULL) DESC, cnt DESC
 """)
-    return {"by_type": by_type, "totals": totals[0] if totals else {}}
+    # The ROLLUP grand-total row has alert_type = NULL; split it out from the per-type rows.
+    total_row = next((r for r in rows if r.get("alert_type") is None), {})
+    by_type = [{"alert_type": r["alert_type"], "cnt": r["cnt"], "critical": r["critical"]}
+               for r in rows if r.get("alert_type") is not None]
+    totals = {"total": total_row.get("cnt"), "critical": total_row.get("critical"),
+              "entities": total_row.get("entities")}
+    return {"by_type": by_type, "totals": totals}
 
 
 @router.get("/alerts/{alert_id}")

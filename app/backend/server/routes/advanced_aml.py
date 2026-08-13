@@ -5,7 +5,7 @@
 """
 from typing import Optional
 from fastapi import APIRouter
-from ..db import fetch_all
+from ..db import fetch_all, cached_fetch_all
 from ..config import GOLD_SCHEMA
 
 router = APIRouter(prefix="/api/aml", tags=["advanced-aml"])
@@ -13,25 +13,30 @@ router = APIRouter(prefix="/api/aml", tags=["advanced-aml"])
 
 # ─────────────────────── Sanctions & Watchlist ───────────────────────────
 @router.get("/screening")
-def screening(confidence: Optional[str] = None, limit: int = 200):
+def screening(confidence: Optional[str] = None, limit: int = 100):
     where = "1=1"
     params = []
     if confidence:
         where = "confidence = :conf"
         params = [{"name": "conf", "value": confidence}]
-    return fetch_all(f"""
+    # Unfiltered screening list is near-static and revisited often — cache it.
+    # (The default view; filtered variants hit the warehouse directly.)
+    sql = f"""
 SELECT screening_id, entity_name, party_type, entity_country, watch_name, list_type,
        list_source, reason, severity, confidence, match_score
 FROM {GOLD_SCHEMA}.sanctions_screening_hits
 WHERE {where}
 ORDER BY CASE confidence WHEN 'confirmed' THEN 0 WHEN 'probable' THEN 1 ELSE 2 END, match_score DESC
 LIMIT {int(limit)}
-""", params or None)
+"""
+    if not confidence:
+        return cached_fetch_all(f"screening/{int(limit)}", sql)
+    return fetch_all(sql, params or None)
 
 
 @router.get("/screening/summary")
 def screening_summary():
-    return fetch_all(f"""
+    return cached_fetch_all("screening/summary", f"""
 SELECT list_type, confidence, count(*) AS hits
 FROM {GOLD_SCHEMA}.sanctions_screening_hits GROUP BY list_type, confidence
 """)
@@ -42,8 +47,9 @@ FROM {GOLD_SCHEMA}.sanctions_screening_hits GROUP BY list_type, confidence
 def model_governance():
     """Model risk management surface (regulators ask "how is the AI validated?").
     Returns the registered SAR model's validation metrics, the equal-alert-budget
-    false-positive-reduction vs the legacy rules score, and governance metadata."""
-    rows = fetch_all(f"""
+    false-positive-reduction vs the legacy rules score, and governance metadata.
+    Cached — training metadata only changes on a retrain, not per request."""
+    rows = cached_fetch_all("model-governance", f"""
 SELECT model_name, model_version, algorithm, run_id,
        roc_auc, precision, recall, f1,
        model_fp, rules_fp, fp_reduction_pct,
@@ -51,7 +57,7 @@ SELECT model_name, model_version, algorithm, run_id,
        blend_model_weight, blend_rules_weight, governance_status, trained_at
 FROM {GOLD_SCHEMA}.ml_model_metrics
 ORDER BY model_version DESC LIMIT 1
-""")
+""", ttl=300)
     return rows[0] if rows else {}
 
 
@@ -59,11 +65,11 @@ ORDER BY model_version DESC LIMIT 1
 def model_drift():
     """Feature-drift monitoring (ongoing model validation). Per-feature current-vs-
     baseline mean shift + status, and an overall verdict driving the retrain trigger."""
-    rows = fetch_all(f"""
+    rows = cached_fetch_all("model-drift", f"""
 SELECT feature, baseline_mean, current_mean, mean_shift_sigma, drift_status, computed_at
 FROM {GOLD_SCHEMA}.ml_drift_metrics
 ORDER BY mean_shift_sigma DESC
-""")
+""", ttl=300)
     status = "stable"
     if any(r.get("drift_status") == "drift" for r in rows):
         status = "drift"

@@ -1,7 +1,7 @@
 """Customer 360 CDP view (PRD §9 page 4)."""
 from typing import Optional
 from fastapi import APIRouter
-from ..db import fetch_all
+from ..db import fetch_all, parallel
 from ..http import fetch_one_or_404
 from ..config import GOLD_SCHEMA
 
@@ -28,15 +28,23 @@ def customer_detail(customer_id: str):
 SELECT * FROM {GOLD_SCHEMA}.customer_360 WHERE customer_id = :cid
 """, [{"name": "cid", "value": customer_id}])
     eid = profile.get("entity_id")
-    alerts = fetch_all(f"""
+    ep = [{"name": "eid", "value": eid}]
+    # Alerts + adverse media both key off entity_id and are independent — run them
+    # concurrently so the customer drill-down is one round-trip after the profile.
+    if eid:
+        alerts, media = parallel(
+            lambda: fetch_all(f"""
 SELECT alert_id, alert_type, severity, triggered_at, score, explanation
 FROM {GOLD_SCHEMA}.fraud_alerts WHERE primary_entity_id = :eid
 ORDER BY triggered_at DESC
-""", [{"name": "eid", "value": eid}]) if eid else []
-    media = fetch_all(f"""
+""", ep),
+            lambda: fetch_all(f"""
 SELECT headline, source, published_at, risk_summary
 FROM {GOLD_SCHEMA}.adverse_media_analysis WHERE entity_id = :eid
-""", [{"name": "eid", "value": eid}]) if eid else []
+""", ep),
+        )
+    else:
+        alerts, media = [], []
     profile["alerts"] = alerts
     profile["adverse_media"] = media
     return profile

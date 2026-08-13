@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from ..db import fetch_all, execute, ai_query
+from ..db import fetch_all, execute, ai_query, parallel, cached_fetch_all, fire_and_forget
 from ..http import fetch_one_or_404
 from ..config import GOLD_SCHEMA, SILVER_SCHEMA
 from ..casestate import can_transition, transition_error
@@ -18,10 +18,13 @@ log = logging.getLogger("sentinel.sherlock")
 
 def audit(action: str, actor: str = "system", case_id: str = "", detail: str = "",
           actor_role: str = "", source: str = "app"):
-    """Append an immutable audit event. Best-effort: auditing must never break the
-    user action, so failures are swallowed (the write is a fire-and-forget INSERT)."""
-    try:
-        execute(f"""
+    """Append an immutable audit event. Fire-and-forget on a background thread so the
+    ~1.5s INSERT round-trip never sits on the critical path of a user-facing request
+    (opening a case used to pay for this write before any data was read). Best-effort:
+    failures are logged, never raised."""
+    def _write():
+        try:
+            execute(f"""
 INSERT INTO {GOLD_SCHEMA}.audit_log
   (event_id, event_ts, actor, actor_role, action, case_id, detail, source)
 VALUES (:id, current_timestamp(), :actor, :role, :action, :cid, :detail, :src)
@@ -29,54 +32,59 @@ VALUES (:id, current_timestamp(), :actor, :role, :action, :cid, :detail, :src)
       {"name": "role", "value": actor_role}, {"name": "action", "value": action},
       {"name": "cid", "value": case_id}, {"name": "detail", "value": detail},
       {"name": "src", "value": source}])
-    except Exception as e:  # best-effort, but surface it so a broken audit path is visible
-        log.warning("audit INSERT failed (action=%s case=%s): %s", action, case_id, e)
+        except Exception as e:  # surface a broken audit path without breaking the action
+            log.warning("audit INSERT failed (action=%s case=%s): %s", action, case_id, e)
+    fire_and_forget(_write)
 
 
 # ─────────────────────────── Personas ────────────────────────────────────
 @router.get("/personas")
 def personas():
-    return fetch_all(f"""
+    # Static for the session but fetched on every app load — cache it (longer TTL).
+    return cached_fetch_all("personas", f"""
 SELECT analyst_id, analyst_name, team_id, team_name
 FROM {GOLD_SCHEMA}.sherlock_analysts ORDER BY analyst_name
-""")
+""", ttl=300)
 
 
 # ─────────────────────── Executive Overview ──────────────────────────────
+# The executive dashboard reads six materialized views that only change on the
+# pipeline cadence, yet a demo re-opens this page constantly. Serve them from the
+# short in-process TTL cache so repeat views are instant instead of ~1.5s each.
 @router.get("/exec/kpis")
 def exec_kpis():
-    rows = fetch_all(f"SELECT * FROM {GOLD_SCHEMA}.sherlock_exec_kpis")
+    rows = cached_fetch_all("exec/kpis", f"SELECT * FROM {GOLD_SCHEMA}.sherlock_exec_kpis")
     return rows[0] if rows else {}
 
 
 @router.get("/exec/daily-new")
 def exec_daily_new():
-    return fetch_all(f"SELECT d, alerts FROM {GOLD_SCHEMA}.sherlock_daily_new ORDER BY d")
+    return cached_fetch_all("exec/daily-new", f"SELECT d, alerts FROM {GOLD_SCHEMA}.sherlock_daily_new ORDER BY d")
 
 
 @router.get("/exec/outstanding")
 def exec_outstanding():
-    return fetch_all(f"SELECT due_date, alerts FROM {GOLD_SCHEMA}.sherlock_outstanding ORDER BY due_date")
+    return cached_fetch_all("exec/outstanding", f"SELECT due_date, alerts FROM {GOLD_SCHEMA}.sherlock_outstanding ORDER BY due_date")
 
 
 @router.get("/exec/by-scenario")
 def exec_by_scenario():
-    return fetch_all(f"SELECT scenario, alerts FROM {GOLD_SCHEMA}.sherlock_by_scenario ORDER BY alerts DESC")
+    return cached_fetch_all("exec/by-scenario", f"SELECT scenario, alerts FROM {GOLD_SCHEMA}.sherlock_by_scenario ORDER BY alerts DESC")
 
 
 @router.get("/exec/priority-status")
 def exec_priority_status():
-    return fetch_all(f"SELECT priority, status, alerts FROM {GOLD_SCHEMA}.sherlock_priority_status")
+    return cached_fetch_all("exec/priority-status", f"SELECT priority, status, alerts FROM {GOLD_SCHEMA}.sherlock_priority_status")
 
 
 @router.get("/exec/resolution-flow")
 def exec_resolution_flow():
-    return fetch_all(f"SELECT source, target, value FROM {GOLD_SCHEMA}.sherlock_resolution_flow")
+    return cached_fetch_all("exec/resolution-flow", f"SELECT source, target, value FROM {GOLD_SCHEMA}.sherlock_resolution_flow")
 
 
 @router.get("/exec/team-performance")
 def exec_team_performance():
-    return fetch_all(f"""
+    return cached_fetch_all("exec/team-performance", f"""
 SELECT team_name, cases, closed, past_due, avg_hours, avg_risk
 FROM {GOLD_SCHEMA}.sherlock_team_performance ORDER BY cases DESC
 """)
@@ -94,19 +102,6 @@ def my_queue(analyst_id: str, priority: Optional[str] = None, scenario: Optional
     against the known set) and `scenario` (bound as a parameter — free text but never
     interpolated). KPIs/weekly stay unfiltered so the headline numbers are stable."""
     p = [{"name": "aid", "value": analyst_id}]
-    kpis = fetch_all(f"""
-SELECT
-  sum(CASE WHEN priority='critical' THEN 1 ELSE 0 END) AS critical,
-  sum(CASE WHEN priority='high' THEN 1 ELSE 0 END) AS high,
-  count(*) AS total,
-  sum(CASE WHEN status='new' THEN 1 ELSE 0 END) AS new_alerts
-FROM {GOLD_SCHEMA}.sherlock_cases WHERE analyst_id = :aid
-""", p)
-    weekly = fetch_all(f"""
-SELECT date_trunc('WEEK', opened_at) AS week, scenario, count(*) AS alerts
-FROM {GOLD_SCHEMA}.sherlock_cases WHERE analyst_id = :aid
-GROUP BY date_trunc('WEEK', opened_at), scenario ORDER BY week
-""", p)
     filt = ""
     ap = list(p)
     if priority and priority.lower() in _PRIORITIES:
@@ -115,7 +110,28 @@ GROUP BY date_trunc('WEEK', opened_at), scenario ORDER BY week
     if scenario:
         filt += " AND c.scenario = :scen"
         ap.append({"name": "scen", "value": scenario})
-    active = fetch_all(f"""
+
+    # KPIs, weekly breakdown and the active list are independent warehouse reads —
+    # run them concurrently so the queue loads in ~one round-trip instead of three.
+    def _kpis():
+        return fetch_all(f"""
+SELECT
+  sum(CASE WHEN priority='critical' THEN 1 ELSE 0 END) AS critical,
+  sum(CASE WHEN priority='high' THEN 1 ELSE 0 END) AS high,
+  count(*) AS total,
+  sum(CASE WHEN status='new' THEN 1 ELSE 0 END) AS new_alerts
+FROM {GOLD_SCHEMA}.sherlock_cases WHERE analyst_id = :aid
+""", p)
+
+    def _weekly():
+        return fetch_all(f"""
+SELECT date_trunc('WEEK', opened_at) AS week, scenario, count(*) AS alerts
+FROM {GOLD_SCHEMA}.sherlock_cases WHERE analyst_id = :aid
+GROUP BY date_trunc('WEEK', opened_at), scenario ORDER BY week
+""", p)
+
+    def _active():
+        return fetch_all(f"""
 SELECT c.case_id, c.alert_num, c.customer_name, c.scenario, c.risk_score, c.priority,
        c.amount, c.days_open, c.status, s.ai_risk, s.model_version
 FROM {GOLD_SCHEMA}.sherlock_cases c
@@ -126,6 +142,8 @@ ORDER BY coalesce(s.ai_risk, c.risk_score) DESC,
          c.days_open DESC
 LIMIT 100
 """, ap)
+
+    kpis, weekly, active = parallel(_kpis, _weekly, _active)
     # Enrich each active case with its SLA status (priority-driven target vs days_open).
     for a in active:
         a["sla"] = sla_status(a.get("priority"), a.get("days_open"))
@@ -149,31 +167,41 @@ LEFT JOIN {GOLD_SCHEMA}.ml_alert_scores s ON s.case_id = c.case_id
 WHERE c.case_id = :cid
 """, p)
     cust = case.get("customer_id")
-    # flagged transactions for this customer's accounts
-    txns = fetch_all(f"""
+    cp = [{"name": "cust", "value": cust}]
+    # The 4 detail lists are independent warehouse reads — fan them out concurrently
+    # so the investigation page loads in ~one round-trip instead of four (~6s → ~1.5s).
+    def _txns():
+        return fetch_all(f"""
 SELECT t.transaction_id, t.amount, t.direction, t.channel, t.txn_ts, t.description, t.counterparty_id
 FROM {SILVER_SCHEMA}.transactions t
 JOIN {SILVER_SCHEMA}.accounts a ON a.account_id = t.account_id
 WHERE a.customer_id = :cust
 ORDER BY t.amount DESC LIMIT 12
-""", [{"name": "cust", "value": cust}]) if cust else []
-    # counterparties (entity relationships)
-    parties = fetch_all(f"""
+""", cp) if cust else []
+
+    def _parties():
+        return fetch_all(f"""
 SELECT DISTINCT t.counterparty_id, tp.full_name, tp.country
 FROM {SILVER_SCHEMA}.transactions t
 JOIN {SILVER_SCHEMA}.accounts a ON a.account_id = t.account_id
 LEFT JOIN {SILVER_SCHEMA}.third_parties tp ON tp.third_party_id = t.counterparty_id
 WHERE a.customer_id = :cust AND t.counterparty_id IS NOT NULL
 LIMIT 15
-""", [{"name": "cust", "value": cust}]) if cust else []
-    notes = fetch_all(f"""
+""", cp) if cust else []
+
+    def _notes():
+        return fetch_all(f"""
 SELECT author, note, note_type, created_at FROM {GOLD_SCHEMA}.sherlock_case_notes
 WHERE case_id = :cid ORDER BY created_at DESC LIMIT 20
 """, p)
-    actions = fetch_all(f"""
+
+    def _actions():
+        return fetch_all(f"""
 SELECT action, reason, actor, created_at FROM {GOLD_SCHEMA}.sherlock_case_actions
 WHERE case_id = :cid ORDER BY created_at DESC LIMIT 20
 """, p)
+
+    txns, parties, notes, actions = parallel(_txns, _parties, _notes, _actions)
     case["flagged_transactions"] = txns
     case["counterparties"] = parties
     case["notes"] = notes

@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from ..db import fetch_all, ai_query
+from ..db import fetch_all, ai_query, parallel
 from ..http import fetch_one_or_404
 from ..config import get_workspace_client, GOLD_SCHEMA
 
@@ -67,9 +67,12 @@ def ask(a: Ask):
 # ─────────────────────── Executive AI briefing ───────────────────────────
 @router.get("/exec-briefing")
 def exec_briefing():
-    k = fetch_all(f"SELECT * FROM {GOLD_SCHEMA}.sherlock_exec_kpis")
-    scen = fetch_all(f"SELECT scenario, alerts FROM {GOLD_SCHEMA}.sherlock_by_scenario ORDER BY alerts DESC LIMIT 3")
-    teams = fetch_all(f"SELECT team_name, past_due, avg_hours FROM {GOLD_SCHEMA}.sherlock_team_performance ORDER BY past_due DESC LIMIT 2")
+    # Three independent MV reads before the LLM call — fan out concurrently.
+    k, scen, teams = parallel(
+        lambda: fetch_all(f"SELECT * FROM {GOLD_SCHEMA}.sherlock_exec_kpis"),
+        lambda: fetch_all(f"SELECT scenario, alerts FROM {GOLD_SCHEMA}.sherlock_by_scenario ORDER BY alerts DESC LIMIT 3"),
+        lambda: fetch_all(f"SELECT team_name, past_due, avg_hours FROM {GOLD_SCHEMA}.sherlock_team_performance ORDER BY past_due DESC LIMIT 2"),
+    )
     kpi = k[0] if k else {}
     top_scen = ", ".join(f"{r['scenario']} ({r['alerts']})" for r in scen)
     worst_team = ", ".join(f"{r['team_name']} ({r['past_due']} past due, {r['avg_hours']}h avg)" for r in teams)

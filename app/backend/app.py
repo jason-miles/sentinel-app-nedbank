@@ -1,17 +1,39 @@
-"""Nedbank Fraud & AML — FastAPI application entry point.
+"""Capitec Fraud & AML — FastAPI application entry point.
 
 Serves the built React frontend (frontend/dist) and the /api routes as a single
 process (Databricks Apps binds one port; single-process avoids CORS).
 """
 import os
+import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+from server.db import fetch_all, fire_and_forget
 from server.routes import alerts, network, customers, travel, sherlock, genai, advanced_aml, sar_agents, sar_eval, sim
 
-app = FastAPI(title="SherlockAML — Nedbank", version="0.2.0")
+log = logging.getLogger("sentinel.app")
+
+
+def _warm_warehouse():
+    """Fire a trivial query so the serverless SQL warehouse is spun up before the
+    first real demo click — turns a potential ~10-30s cold start into a warm ~1.5s."""
+    try:
+        fetch_all("SELECT 1")
+    except Exception as e:  # never let warm-up break startup
+        log.warning("warehouse warm-up failed: %s", e)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Prime the warehouse in the background so app boot isn't blocked on it.
+    fire_and_forget(_warm_warehouse)
+    yield
+
+
+app = FastAPI(title="SherlockAML — Nedbank", version="0.2.0", lifespan=lifespan)
 
 # CORS for local dev (Vite :5173 -> FastAPI :8000). Harmless in the app.
 app.add_middleware(
@@ -35,7 +57,11 @@ app.include_router(sim.router)
 
 
 @app.get("/api/health")
-def health():
+def health(warm: bool = False):
+    """Liveness probe. `?warm=true` also touches the warehouse (fire-and-forget) so
+    an uptime ping / pre-demo hit keeps the serverless SQL warehouse hot."""
+    if warm:
+        fire_and_forget(_warm_warehouse)
     return {"status": "ok", "app": "nedbank-sentinel"}
 
 

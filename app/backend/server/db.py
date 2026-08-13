@@ -48,10 +48,13 @@ def _execute(sql: str, parameters: Optional[List[Dict]] = None) -> StatementResp
         catalog=CATALOG,
     )
     # Poll if the warehouse returned before the statement finished (long ai_query).
-    waited = 0.0
+    # Exponential backoff (0.4s → 2s cap) so a statement that finishes just after the
+    # 50s wait returns almost immediately, instead of always eating a flat 2s tick.
+    waited, delay = 0.0, 0.4
     while resp.status and resp.status.state in (StatementState.PENDING, StatementState.RUNNING) and waited < 120:
-        time.sleep(2)
-        waited += 2
+        time.sleep(delay)
+        waited += delay
+        delay = min(delay * 1.6, 2.0)
         resp = client.statement_execution.get_statement(resp.statement_id)
     return resp
 
@@ -84,6 +87,59 @@ def fetch_one(sql: str, parameters: Optional[List[Dict]] = None) -> Optional[Dic
     fetch-then-index idiom (pairs with the fetch_one_or_404 API helper)."""
     rows = fetch_all(sql, parameters)
     return rows[0] if rows else None
+
+
+# ── Performance helpers ───────────────────────────────────────────────────
+# Each Statement Execution API call carries ~1.5s of fixed round-trip overhead,
+# so an endpoint that fires N independent SELECTs serially costs ~N×1.5s. These
+# two helpers cut that: run independent queries concurrently, and cache the
+# near-static reads (materialized-view dashboards) for a few seconds.
+
+from concurrent.futures import ThreadPoolExecutor  # noqa: E402
+
+
+def parallel(*tasks):
+    """Run independent zero-arg callables concurrently and return their results
+    in order. Used to collapse several independent warehouse round-trips in one
+    endpoint into ~one round-trip of wall-clock time."""
+    if not tasks:
+        return []
+    with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
+        return [f.result() for f in [pool.submit(t) for t in tasks]]
+
+
+# Daemon pool for fire-and-forget writes (e.g. audit-log INSERTs) so a ~1.5s
+# warehouse round-trip never sits on the critical path of a user-facing GET.
+_BG = ThreadPoolExecutor(max_workers=4, thread_name_prefix="sentinel-bg")
+
+
+def fire_and_forget(fn) -> None:
+    """Schedule a zero-arg callable on the background pool; never blocks or raises."""
+    try:
+        _BG.submit(fn)
+    except Exception:  # pool shutdown / saturated — dropping a best-effort write is fine
+        pass
+
+
+_CACHE: Dict[str, tuple] = {}
+_CACHE_TTL = float(os.environ.get("FRAUD_CACHE_TTL", "15"))  # seconds; 0 disables
+
+
+def cached_fetch_all(key: str, sql: str, parameters: Optional[List[Dict]] = None,
+                     ttl: Optional[float] = None) -> List[Dict[str, Any]]:
+    """fetch_all with a tiny in-process TTL cache, keyed by `key`. For read-only,
+    near-static dashboard queries a demo hammers repeatedly — the first hit pays
+    the warehouse round-trip, subsequent hits within the TTL are instant. Safe
+    because the underlying MVs change on the pipeline cadence, not per request."""
+    life = _CACHE_TTL if ttl is None else ttl
+    if life > 0:
+        hit = _CACHE.get(key)
+        if hit and (time.monotonic() - hit[0]) < life:
+            return hit[1]
+    rows = fetch_all(sql, parameters)
+    if life > 0:
+        _CACHE[key] = (time.monotonic(), rows)
+    return rows
 
 
 def ai_query(prompt: str) -> str:

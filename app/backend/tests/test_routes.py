@@ -94,3 +94,26 @@ def test_missing_record_returns_404(monkeypatch):
     c = TestClient(app_module.app)
     assert c.get("/api/customers/NOPE").status_code == 404
     assert c.get("/api/alerts/NOPE").status_code == 404
+
+
+def test_parallel_helper_runs_and_orders():
+    """parallel() runs callables concurrently and preserves result order."""
+    import time as _t
+    start = _t.time()
+    out = db.parallel(lambda: (_t.sleep(0.2), "a")[1],
+                      lambda: (_t.sleep(0.2), "b")[1],
+                      lambda: (_t.sleep(0.2), "c")[1])
+    assert out == ["a", "b", "c"]
+    assert _t.time() - start < 0.5  # ~0.2s (parallel), not ~0.6s (serial)
+
+
+def test_cached_fetch_all_hits_warehouse_once(monkeypatch):
+    """cached_fetch_all serves repeat calls (same key) from cache within the TTL."""
+    calls = []
+    monkeypatch.setattr(db, "fetch_all", lambda sql, params=None: calls.append(1) or [{"n": 1}])
+    db._CACHE.pop("t/key", None)
+    r1 = db.cached_fetch_all("t/key", "SELECT 1", ttl=60)
+    r2 = db.cached_fetch_all("t/key", "SELECT 1", ttl=60)
+    assert r1 == r2 == [{"n": 1}]
+    assert len(calls) == 1  # second call served from cache
+    db._CACHE.pop("t/key", None)
