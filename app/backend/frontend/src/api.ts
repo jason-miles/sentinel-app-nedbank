@@ -1,8 +1,25 @@
 // SherlockAML API client.
-export async function apiGet<T = any>(path: string): Promise<T> {
-  const res = await fetch(path);
-  if (!res.ok) throw new Error(`${path} -> ${res.status}`);
-  return res.json();
+// GETs auto-retry on transient failures (5xx or a dropped connection) — the usual
+// cause is a cold serverless SQL warehouse: the first request pays the ~15-30s
+// cold start (and may be dropped by the Apps gateway), the retry lands warm. This
+// keeps a cold first load from surfacing as a hard "Couldn't load" error.
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+export async function apiGet<T = any>(path: string, retries = 2): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(path);
+      if (res.ok) return await res.json();
+      // 5xx is transient (cold warehouse / gateway); 4xx is not — don't retry those.
+      if (res.status < 500 || attempt === retries) throw new Error(`${path} -> ${res.status}`);
+    } catch (e) {
+      lastErr = e;
+      if (attempt === retries) throw e;
+    }
+    await sleep(1500 * (attempt + 1)); // 1.5s, 3s — enough for a warehouse to spin up
+  }
+  throw lastErr ?? new Error(`${path} -> failed`);
 }
 export async function apiPost<T = any>(path: string, body: unknown): Promise<T> {
   const res = await fetch(path, {

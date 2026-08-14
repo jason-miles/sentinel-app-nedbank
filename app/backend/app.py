@@ -27,11 +27,28 @@ def _warm_warehouse():
         log.warning("warehouse warm-up failed: %s", e)
 
 
+# Ping interval: comfortably under the warehouse auto-stop (20 min) so an idle app
+# never lets its warehouse go cold and hand the next visitor a cold-start failure.
+KEEP_WARM_SECS = int(os.environ.get("FRAUD_KEEP_WARM_SECS", "600"))
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # Prime the warehouse in the background so app boot isn't blocked on it.
+    import asyncio
+    # Prime the warehouse immediately (background so boot isn't blocked)...
     fire_and_forget(_warm_warehouse)
-    yield
+
+    # ...then keep it warm on a timer for as long as the app runs. A cold serverless
+    # SQL warehouse was the cause of a "Couldn't load" failure after idle.
+    async def _keeper():
+        while True:
+            await asyncio.sleep(KEEP_WARM_SECS)
+            fire_and_forget(_warm_warehouse)
+    task = asyncio.create_task(_keeper())
+    try:
+        yield
+    finally:
+        task.cancel()
 
 
 app = FastAPI(title="SherlockAML — Nedbank", version="0.2.0", lifespan=lifespan)
