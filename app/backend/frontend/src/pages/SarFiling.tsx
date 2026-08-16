@@ -160,7 +160,7 @@ export function SarFiling() {
         </div>
         <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span className="k" style={{ fontWeight: 600 }}>Four-eyes approver</span>
-          <input aria-label="Four-eyes approver name" value={approver} onChange={(e) => setApprover(e.target.value)}
+          <input id="sar-approver" name="sar-approver" aria-label="Four-eyes approver name" value={approver} onChange={(e) => setApprover(e.target.value)}
             placeholder="second approver (must differ from filer)" style={{ minWidth: 280 }} />
           <span className="muted" style={{ fontSize: 12 }}>
             Filing requires a second, distinct approver — {current?.analyst_name} is the filer.

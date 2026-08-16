@@ -55,7 +55,12 @@ body {
   margin: 0; background: var(--bg); color: var(--text);
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 14px; -webkit-font-smoothing: antialiased; letter-spacing: .005em;
+  /* Contextual alternates + kerning for a more considered text finish. */
+  font-feature-settings: "cv02", "cv03", "cv04", "kern";
 }
+/* Tabular, lining figures wherever numbers must line up (KPIs, tables, metrics) —
+   a small craft detail that makes a data-dense app read as precise, not spreadsheet-y. */
+.kpi .value, table td, .mono, .metric, .story-step, .kpi .delta { font-variant-numeric: tabular-nums lining-nums; }
 a { color: inherit; text-decoration: none; }
 /* Accessibility: visible keyboard focus + skip-to-content link */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
@@ -63,6 +68,8 @@ a { color: inherit; text-decoration: none; }
   padding: 10px 16px; border-radius: 0 0 4px 0; }
 .skip-link:focus { left: 0; }
 h1,h2,h3 { font-family: "Libre Caslon Text", Georgia, serif; color: var(--navy); font-weight: 400; letter-spacing: 0; }
+/* Libre Caslon tightens up at display sizes — a hair of negative tracking reads as intentional. */
+.page-title, .kpi .value { letter-spacing: -0.012em; }
 
 /* ── Top bar ─────────────────────────────────────────────── */
 .topbar {

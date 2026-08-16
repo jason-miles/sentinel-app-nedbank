@@ -220,7 +220,7 @@ function AgentPanel({ caseId }: { caseId: string }) {
         ))}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
-        <input aria-label="Ask the AI agent for guidance" style={{ flex: 1 }} placeholder="Ask for guidance…" value={q}
+        <input id="agent-guidance-q" name="agent-guidance-q" aria-label="Ask the AI agent for guidance" style={{ flex: 1 }} placeholder="Ask for guidance…" value={q}
           onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} />
         <button className="btn sm" onClick={ask} disabled={busy}>Ask</button>
       </div>

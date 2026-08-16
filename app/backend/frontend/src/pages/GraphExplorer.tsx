@@ -86,7 +86,7 @@ export function GraphExplorer() {
     <>
       <h1 className="page-title">Graph Explorer</h1>
       <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-        <input aria-label="Search the knowledge graph" style={{ flex: 1 }} placeholder="Search the knowledge graph with natural language…"
+        <input id="graph-search" name="graph-search" aria-label="Search the knowledge graph" style={{ flex: 1 }} placeholder="Search the knowledge graph with natural language…"
           value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && search(q)} />
         <button className="btn" onClick={() => search(q)}>Search</button>
       </div>

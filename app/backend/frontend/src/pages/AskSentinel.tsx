@@ -40,7 +40,7 @@ export function AskSentinel() {
 
       <div className="panel">
         <div style={{ display: "flex", gap: 10 }}>
-          <input aria-label="Ask Sentinel question" style={{ flex: 1 }} placeholder="Ask a question about alerts, cases, teams, or customers…"
+          <input id="ask-sentinel-q" name="ask-sentinel-q" aria-label="Ask Sentinel question" style={{ flex: 1 }} placeholder="Ask a question about alerts, cases, teams, or customers…"
             value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask(q)} />
           <button className="btn" onClick={() => ask(q)} disabled={busy}>{busy ? "Thinking…" : "Ask Genie"}</button>
         </div>
