@@ -29,7 +29,7 @@ const STEPS: Step[] = [
     route: "/exec",
     say: "Sentinel is a fraud & AML copilot on one governed Databricks Lakehouse — detection, investigation, regulator-ready filing, and analytics. We'll walk three real scenarios, live: detect, document, then anticipate.",
     points: [
-      "Scenario 1 · Detect — structuring, a hidden mule network, and a live streaming alert",
+      "Scenario 1 · Detect — a critical mule-aggregation alert, its hidden network, and a live streaming alert",
       "Scenario 2 · Document — a multi-agent STR drafted in seconds with goAML XML",
       "Scenario 3 · Anticipate — a proactive FATF typology sweep that no rule caught",
       "One Lakehouse, one Unity Catalog governance plane, end to end",
@@ -37,16 +37,17 @@ const STEPS: Step[] = [
     tip: "Executive Overview — live KPIs: case volume, false-positive rate, ZAR monitored, team performance.",
   },
   {
-    title: "1 · A routine alert",
+    title: "1 · A critical alert",
     beat: "DETECT",
-    route: "/investigation/CASE-90001",
-    say: "An analyst picks up what looks like a minor alert — a few cash deposits, each just under the R25,000 reporting threshold. Classic structuring. Notice the AI Risk score agrees this is high-risk.",
+    route: "/investigation/CASE-90002",
+    say: "An analyst picks up a critical alert — one account takes rapid inflows from seven others, then pushes a large sum straight out by cross-border SWIFT. The AI Risk score puts it right at the top of the queue.",
     points: [
-      "Three cash deposits, each deliberately below the R25,000 CTR threshold",
+      "Seven ~R40k inflows aggregate into one account within hours",
+      "R260k then leaves by SWIFT to an offshore shell (Onyx Capital, Mauritius)",
       "AI Risk score reprioritises it above look-alike false positives",
       "Grounded policy citations explain the 'why' next to the score",
     ],
-    tip: "CASE-90001 (Lerato Sithole) — sub-threshold cash-ins; AI Risk vs Rules score; cited policy.",
+    tip: "CASE-90002 (Kabelo Motaung) — rapid mule aggregation → cross-border cash-out; AI Risk 96.",
   },
   {
     title: "1 · The hidden mule network",
@@ -77,8 +78,8 @@ const STEPS: Step[] = [
   {
     title: "2 · STR drafted in seconds",
     beat: "DOCUMENT",
-    route: "/sar/CASE-90001",
-    dwell: 24000,  // the multi-agent narrative takes ~17s to render — hold so it lands
+    route: "/sar/CASE-90002",
+    dwell: 30000,  // the multi-agent narrative takes ~27s to render — hold so it lands
     say: "Watch the multi-agent workflow run: it auto-gathers the evidence pack and drafts a regulator-format STR — grounded in retrieved adverse media and the bank's own AML policy and FATF typologies, with a schema-valid goAML XML ready for the Financial Intelligence Centre. Hours of analyst work in seconds.",
     points: [
       "Specialist agents gather the evidence pack automatically",
@@ -99,12 +100,25 @@ const STEPS: Step[] = [
       "Two gaming accounts, net flow ≈ 0, that never tripped an alert",
       "Reactive alert-handling becomes proactive anticipation",
     ],
-    tip: "Compliance → Impossible Travel & typology surfaces; two gaming accounts, net ≈ 0, never alerted.",
+    tip: "Compliance → typology exposure; two gaming accounts, net ≈ 0, never alerted.",
+  },
+  {
+    title: "3 · Impossible travel",
+    beat: "ANTICIPATE",
+    route: "/compliance?tab=travel",
+    say: "And Sentinel watches physics, not just patterns. Impossible travel: one card tapped in two cities too far apart to be a real journey. Divide the distance between the taps by the time between them — an implied speed above ~900 km/h simply can't be flown. That's a cloned or compromised card, on screen the instant it happens.",
+    points: [
+      "Geospatial velocity on card taps — haversine distance ÷ elapsed time",
+      "New York → Johannesburg minutes apart implies thousands of km/h — physically impossible",
+      "A strong card-cloning / account-takeover signal no static threshold expresses cleanly",
+      "Each red arc on the world map is a live alert, tagged with its implied speed",
+    ],
+    tip: "Compliance → Impossible Travel — the world map: red arcs converge on SA cities, each labelled with its impossible km/h.",
   },
   {
     title: "AI you can defend",
     beat: "ANTICIPATE",
-    route: "/compliance",
+    route: "/compliance?tab=model",
     say: "Every model, feature, agent tool-call and filing is governed by one Unity Catalog plane — a registered model with a measured false-positive reduction, drift monitored, lineage end-to-end. The governance answer, built in. That's Sentinel.",
     points: [
       "Registered Unity Catalog model with a measured false-positive reduction",

@@ -162,7 +162,7 @@ LIMIT 100
 
 
 @router.get("/case/{case_id}")
-def case_detail(case_id: str, actor: str = "Sarah Chen"):
+def case_detail(case_id: str, actor: str = "Anele Mbatha"):
     """Investigation page: case, flagged transactions, entity network, notes, actions."""
     audit("case_open", actor=actor, case_id=case_id, detail="Opened case investigation", source="investigation")
     p = [{"name": "cid", "value": case_id}]
@@ -224,7 +224,7 @@ WHERE case_id = :cid ORDER BY created_at DESC LIMIT 20
 class Note(BaseModel):
     case_id: str
     note: str
-    author: str = "Sarah Chen"
+    author: str = "Anele Mbatha"
 
 
 @router.post("/case/note")
@@ -242,7 +242,7 @@ class Action(BaseModel):
     case_id: str
     action: str            # escalate | dismiss | proceed_sar
     reason: str = ""
-    actor: str = "Sarah Chen"
+    actor: str = "Anele Mbatha"
 
 
 @router.post("/case/action")
@@ -261,7 +261,7 @@ VALUES (:id, :cid, :action, :reason, :actor, current_timestamp())
 class Transition(BaseModel):
     case_id: str
     target: str            # assigned | in_progress | escalated | closed
-    actor: str = "Sarah Chen"
+    actor: str = "Anele Mbatha"
 
 
 @router.post("/case/transition")
@@ -291,7 +291,7 @@ class Reassign(BaseModel):
     to_analyst_name: str
     to_team_id: str = ""
     to_team_name: str = ""
-    actor: str = "Sarah Chen"
+    actor: str = "Anele Mbatha"
 
 
 @router.post("/case/reassign")
@@ -395,7 +395,7 @@ class SarSubmit(BaseModel):
     scenario: str
     narrative: str
     decision: str = "SAR Filed"
-    filed_by: str = "Sarah Chen"
+    filed_by: str = "Anele Mbatha"
     approved_by: str = ""      # four-eyes: a SECOND person must approve the filing
 
 
@@ -441,7 +441,11 @@ def graph(q: Optional[str] = None, limit: int = 12):
                   JOIN {SILVER}.third_parties tp ON tp.third_party_id = t.counterparty_id
                   WHERE tp.full_name ILIKE :kw)
            THEN 1 ELSE 0 END""".format(SILVER=SILVER_SCHEMA)) if like else "0"
-    seed = fetch_all(f"""
+    # The graph is near-static (customers/accounts/counterparties change on the pipeline
+    # cadence, not per request), so cache both reads with a longer TTL — the deep-link
+    # (e.g. "Motaung mule network") then loads instantly on repeat and the pre-flight
+    # warm-up primes it. Keyed by the NL query + limit so distinct searches don't collide.
+    seed = cached_fetch_all(f"graph:seed:{(q or '').strip().lower()}:{int(limit)}", f"""
 SELECT customer_id, full_name, city, country, risk FROM (
   SELECT c.customer_id, cust.full_name, cust.city, cust.country,
          coalesce(c360.current_risk_rating, 3) AS risk,
@@ -454,7 +458,7 @@ SELECT customer_id, full_name, city, country, risk FROM (
 )
 ORDER BY is_match DESC, max_score DESC
 LIMIT {int(limit)}
-""", match_params or None)
+""", match_params or None, ttl=120)
     nodes, edges, seen = [], [], set()
 
     def add_node(nid, label, kind, score=None):
@@ -477,7 +481,7 @@ LIMIT {int(limit)}
     if seed_ids:
         binds = [{"name": f"c{i}", "value": cid} for i, cid in enumerate(seed_ids)]
         in_list = ", ".join(f":c{i}" for i in range(len(seed_ids)))
-        rels = fetch_all(f"""
+        rels = cached_fetch_all(f"graph:rels:{','.join(seed_ids)}", f"""
 SELECT customer_id, account_id, counterparty_id, cp_name FROM (
   SELECT a.customer_id, a.account_id, t.counterparty_id, tp.full_name AS cp_name,
          row_number() OVER (PARTITION BY a.customer_id ORDER BY a.account_id, t.counterparty_id) AS rn
@@ -486,7 +490,7 @@ SELECT customer_id, account_id, counterparty_id, cp_name FROM (
   LEFT JOIN {SILVER_SCHEMA}.third_parties tp ON tp.third_party_id = t.counterparty_id
   WHERE a.customer_id IN ({in_list})
 ) WHERE rn <= 12
-""", binds)
+""", binds, ttl=120)
         for r in rels:
             cid = r["customer_id"]
             if r.get("account_id"):

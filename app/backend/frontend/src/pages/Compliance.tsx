@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { getScreening, getPkyc, getPkycSummary, getAnomalies, getModelGovernance, getModelDrift, getLlmEval, getAudit, getImpossibleTravel } from "../api";
 import { ErrorState, num, money, SkelTable, SkelKpis } from "../components/ui";
+import { WORLD_LAND_PATH } from "../worldPath";
 
 function Badge({ s }: { s: string }) {
   const map: Record<string, string> = { confirmed: "critical", probable: "high", possible: "medium",
@@ -8,8 +10,16 @@ function Badge({ s }: { s: string }) {
   return <span className={`badge sev-${map[s] || "medium"}`}>{s}</span>;
 }
 
+const TABS = ["screening", "pkyc", "anomaly", "travel", "model", "audit"] as const;
+type Tab = typeof TABS[number];
+
 export function Compliance() {
-  const [tab, setTab] = useState<"screening" | "pkyc" | "anomaly" | "travel" | "model" | "audit">("screening");
+  // Tab is URL-driven (?tab=travel) so it's deep-linkable and the guided demo ("Play the
+  // Demo") can open a specific surface — e.g. Impossible Travel or Model Governance.
+  const [params, setParams] = useSearchParams();
+  const raw = params.get("tab");
+  const tab: Tab = raw && (TABS as readonly string[]).includes(raw) ? (raw as Tab) : "screening";
+  const setTab = (t: Tab) => setParams(t === "screening" ? {} : { tab: t }, { replace: true });
   return (
     <>
       <h1 className="page-title">Compliance & Risk</h1>
@@ -261,42 +271,87 @@ function Pkyc() {
   );
 }
 
-// Inline equirectangular world map (no deps): lon/lat -> x/y, with a graticule,
-// coastline-free but recognisable land boxes, city dots, and a red arc per alert.
+// Professional equirectangular world map (no map lib): real Natural-Earth coastlines
+// (WORLD_LAND_PATH) projected with the SAME lon/lat -> x/y transform as the alert arcs,
+// an ocean gradient + faint graticule, glowing arcs with a travelling "signal" pulse that
+// dramatises the impossible hop, and de-duplicated, halo-outlined, decluttered city labels
+// so clustered taps (e.g. Johannesburg / Durban / Cape Town) stay legible.
 function TravelMap({ rows }: { rows: any[] }) {
   const W = 720, H = 360;
-  const proj = (lat: number, lon: number) => [((lon + 180) / 360) * W, ((90 - lat) / 180) * H];
-  // Rough continent blocks (equirectangular) — enough to orient the eye without a map lib.
-  const LAND = [
-    [-170, 72, -52, 8], [-82, 12, -34, -56], [-12, 60, 40, 34], [-18, 37, 52, -35],
-    [26, 72, 190, 8], [92, -10, 155, -44],
-  ];
+  const proj = (lat: number, lon: number): [number, number] => [((lon + 180) / 360) * W, ((90 - lat) / 180) * H];
+
+  // Collect arcs and the de-duplicated set of tapped cities across every alert leg.
+  const cities = new Map<string, { x: number; y: number; city: string }>();
+  const arcs: { id: string; d: string; mx: number; my: number; kmh?: number }[] = [];
+  rows.forEach((r, i) => {
+    const legs = r.legs || [];
+    if (legs.length < 2) return;
+    const [ax, ay] = proj(Number(legs[0].lat), Number(legs[0].lon));
+    const [bx, by] = proj(Number(legs[1].lat), Number(legs[1].lon));
+    ([[ax, ay, legs[0].city], [bx, by, legs[1].city]] as [number, number, string][]).forEach(([x, y, city]) => {
+      if (city && !cities.has(city)) cities.set(city, { x, y, city });
+    });
+    // Curvature scales with distance so long hops bow more (a cleaner, map-like arc).
+    const dist = Math.hypot(bx - ax, by - ay);
+    const mx = (ax + bx) / 2, my = Math.min(ay, by) - Math.max(24, dist * 0.28);
+    arcs.push({ id: `arc-${i}`, d: `M ${ax} ${ay} Q ${mx} ${my} ${bx} ${by}`, mx, my, kmh: Number(r.implied_kmh) || undefined });
+  });
+
+  // Greedy label declutter: push a colliding label downward and drop a faint leader line.
+  const placed: { x: number; y: number }[] = [];
+  const labels = [...cities.values()].sort((a, b) => a.y - b.y || a.x - b.x).map((c) => {
+    const lx = c.x + 9; let ly = c.y - 5, guard = 0;
+    while (placed.some((p) => Math.abs(p.x - lx) < 60 && Math.abs(p.y - ly) < 12) && guard < 10) { ly += 12; guard++; }
+    placed.push({ x: lx, y: ly });
+    return { ...c, lx, ly, moved: ly !== c.y - 5 };
+  });
+
+  const halo = { paintOrder: "stroke", stroke: "var(--graph-bg)", strokeWidth: 3 } as any;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="travel-map" role="img" aria-label="Impossible-travel card taps on a world map">
-      <rect x="0" y="0" width={W} height={H} fill="var(--graph-bg)" />
-      {LAND.map(([w, n, e, s], k) => {
-        const [x1, y1] = proj(n, w); const [x2, y2] = proj(s, e);
-        return <rect key={k} x={x1} y={y1} width={x2 - x1} height={y2 - y1} rx="6" fill="var(--panel-2)" stroke="var(--border)" />;
-      })}
-      {[-120, -60, 0, 60, 120].map((lon) => <line key={`v${lon}`} x1={proj(0, lon)[0]} y1={0} x2={proj(0, lon)[0]} y2={H} stroke="var(--border)" strokeWidth="0.5" />)}
-      {[-60, -30, 0, 30, 60].map((lat) => <line key={`h${lat}`} x1={0} y1={proj(lat, 0)[1]} x2={W} y2={proj(lat, 0)[1]} stroke="var(--border)" strokeWidth="0.5" />)}
-      {rows.map((r) => {
-        const legs = r.legs || []; if (legs.length < 2) return null;
-        const [ax, ay] = proj(Number(legs[0].lat), Number(legs[0].lon));
-        const [bx, by] = proj(Number(legs[1].lat), Number(legs[1].lon));
-        const mx = (ax + bx) / 2, my = Math.min(ay, by) - 40; // arc control point
-        return (
-          <g key={r.alert_id}>
-            <path d={`M ${ax} ${ay} Q ${mx} ${my} ${bx} ${by}`} fill="none" stroke="var(--critical)" strokeWidth="1.6" opacity="0.8" />
-            {[[ax, ay, legs[0].city], [bx, by, legs[1].city]].map(([x, y, city]: any, k) => (
-              <g key={k}>
-                <circle cx={x} cy={y} r="4" fill="var(--critical)" />
-                <text x={x + 6} y={y - 5} fontSize="9" fill="var(--text)">{city}</text>
-              </g>
-            ))}
-          </g>
-        );
-      })}
+    <svg viewBox={`0 0 ${W} ${H}`} className="travel-map" role="img" preserveAspectRatio="xMidYMid meet"
+      aria-label="Impossible-travel card taps on a world map">
+      <defs>
+        <linearGradient id="arcGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.2" />
+          <stop offset="55%" stopColor="var(--critical)" stopOpacity="0.95" />
+          <stop offset="100%" stopColor="var(--critical)" stopOpacity="0.95" />
+        </linearGradient>
+        <radialGradient id="oceanGrad" cx="50%" cy="40%" r="75%">
+          <stop offset="0%" stopColor="var(--panel)" />
+          <stop offset="100%" stopColor="var(--graph-bg)" />
+        </radialGradient>
+        <filter id="arcGlow" x="-20%" y="-40%" width="140%" height="180%">
+          <feGaussianBlur stdDeviation="1.5" result="b" />
+          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+
+      <rect x="0" y="0" width={W} height={H} fill="url(#oceanGrad)" />
+      {[-120, -60, 0, 60, 120].map((lon) => <line key={`v${lon}`} x1={proj(0, lon)[0]} y1={0} x2={proj(0, lon)[0]} y2={H} stroke="var(--border)" strokeWidth="0.5" opacity="0.45" />)}
+      {[-60, -30, 0, 30, 60].map((lat) => <line key={`h${lat}`} x1={0} y1={proj(lat, 0)[1]} x2={W} y2={proj(lat, 0)[1]} stroke="var(--border)" strokeWidth="0.5" opacity="0.45" />)}
+      <path d={WORLD_LAND_PATH} fill="var(--panel-2)" stroke="var(--border)" strokeWidth="0.6" strokeLinejoin="round" opacity="0.96" />
+
+      {arcs.map((a) => (
+        <g key={a.id}>
+          <path id={a.id} d={a.d} fill="none" stroke="url(#arcGrad)" strokeWidth="1.8" strokeLinecap="round" filter="url(#arcGlow)" />
+          <circle r="2.6" fill="#fff">
+            <animateMotion dur="2.4s" repeatCount="indefinite" rotate="auto"><mpath href={`#${a.id}`} /></animateMotion>
+          </circle>
+          {a.kmh && (
+            <text x={a.mx} y={a.my - 4} fontSize="8.5" textAnchor="middle" fill="var(--critical)"
+              style={{ ...halo, fontWeight: 700 }}>{a.kmh.toLocaleString()} km/h</text>
+          )}
+        </g>
+      ))}
+
+      {labels.map((c) => (
+        <g key={c.city}>
+          {c.moved && <line x1={c.x} y1={c.y} x2={c.lx - 2} y2={c.ly - 3} stroke="var(--border)" strokeWidth="0.6" />}
+          <circle cx={c.x} cy={c.y} r="7" fill="var(--critical)" opacity="0.18" />
+          <circle cx={c.x} cy={c.y} r="3.4" fill="var(--critical)" stroke="#fff" strokeWidth="0.8" />
+          <text x={c.lx} y={c.ly} fontSize="10" fill="var(--text)" style={halo}>{c.city}</text>
+        </g>
+      ))}
     </svg>
   );
 }
