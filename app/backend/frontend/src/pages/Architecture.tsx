@@ -182,6 +182,7 @@ function PlatformArch({ cloud }: { cloud: "aws" | "azure" }) {
     <>
       <p className="arch-cloud-title">Databricks + {c.name} — Lakehouse Platform</p>
 
+      <div className="pdiagram-wrap">
       <div className="pdiagram" role="img"
         aria-label={`Databricks on ${c.name} medallion Lakehouse: batch and streaming sources ingest into Bronze, Silver and Gold Delta Lake tables, feeding Databricks Machine Learning and Databricks SQL.`}>
         {/* connector layer */}
@@ -242,6 +243,7 @@ function PlatformArch({ cloud }: { cloud: "aws" | "azure" }) {
         <Node x={858} y={270} w={248} title="BI/SQL Connectors" sub="Data Catalog · Security" icon={<IconChart c={acc} />} tone="brand" />
         <Node x={858} y={330} w={248} title="Dashboards & Alerts" sub="SQL Editor & Query Catalog" icon={<IconChart c={acc} />} tone="brand" />
         <Node x={858} y={390} w={248} title="BI Tools" sub={c.bi} icon={<IconChart c={acc} />} tone="brand" />
+      </div>
       </div>
 
       <div className="plegend" aria-hidden>

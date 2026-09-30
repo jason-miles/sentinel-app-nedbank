@@ -228,18 +228,40 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--n
 .arch-head { margin-bottom: 22px; }
 .arch-flow { display: flex; align-items: stretch; gap: 8px; overflow-x: auto; padding: 6px 2px 20px; }
 .arch-stage { flex: 1 1 0; min-width: 190px; }
-.arch-stage-title { font-size: 15px; margin: 0 0 14px; color: var(--navy); border-bottom: 2px solid var(--accent);
-  padding-bottom: 6px; display: inline-block; }
+.arch-stage-title { font-size: 15px; margin: 0 0 14px; color: var(--navy); padding-bottom: 7px;
+  display: inline-block; position: relative; }
+.arch-stage-title::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2.5px;
+  border-radius: 2px; background: linear-gradient(90deg, var(--accent), var(--accent-2) 85%, transparent); }
 .arch-apps-sub { font-family: Inter, sans-serif; font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 6px; }
 .arch-group { margin-bottom: 16px; }
 .arch-group-heading { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
   color: var(--accent); margin: 0 0 8px; }
-.arch-card { display: flex; gap: 10px; align-items: flex-start; background: var(--panel); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; box-shadow: var(--shadow); }
-.arch-card-dot { flex: 0 0 auto; width: 8px; height: 8px; margin-top: 5px; border-radius: 2px; background: var(--accent); }
+.arch-card { display: flex; gap: 10px; align-items: flex-start; background: var(--panel);
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px;
+  box-shadow: var(--shadow); position: relative; overflow: hidden;
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+  animation: archCardIn .45s cubic-bezier(.2,.7,.3,1) both; }
+/* sheen sweep on hover */
+.arch-card::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: linear-gradient(105deg, transparent 30%, color-mix(in srgb, var(--accent) 10%, transparent) 50%, transparent 70%);
+  transform: translateX(-120%); transition: opacity .2s ease; }
+.arch-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  box-shadow: 0 2px 4px rgba(4,74,51,.08), 0 16px 30px -16px rgba(4,74,51,.42); }
+.arch-card:hover::after { opacity: 1; animation: archSheen .7s ease; }
+.arch-group .arch-card:nth-child(2) { animation-delay: .05s; }
+.arch-group .arch-card:nth-child(3) { animation-delay: .1s; }
+.arch-group .arch-card:nth-child(4) { animation-delay: .15s; }
+.arch-group .arch-card:nth-child(5) { animation-delay: .2s; }
+@keyframes archCardIn { from { opacity: 0; transform: translateY(7px); } }
+@keyframes archSheen { from { transform: translateX(-120%); } to { transform: translateX(120%); } }
+.arch-card-dot { flex: 0 0 auto; width: 9px; height: 9px; margin-top: 5px; border-radius: 3px;
+  background: linear-gradient(160deg, var(--accent), var(--accent-2));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent); }
 .arch-card-label { font-weight: 600; font-size: 13px; color: var(--navy); line-height: 1.3; }
 .arch-card-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
-.arch-arrow { display: flex; align-items: center; color: var(--accent-2); font-size: 22px; padding: 0 2px; flex: 0 0 auto; }
+.arch-arrow { display: flex; align-items: center; color: var(--accent); font-size: 24px; padding: 0 2px;
+  flex: 0 0 auto; animation: archArrow 1.4s ease-in-out infinite; }
+@keyframes archArrow { 0%,100% { transform: translateX(0); opacity: .55; } 50% { transform: translateX(4px); opacity: 1; } }
 .arch-apps { border-left: 2px dashed var(--border); padding-left: 14px; }
 .arch-app-card { border-left: 3px solid var(--accent); }
 .arch-lakebase { background: var(--navy); border-color: var(--navy); }
@@ -247,13 +269,29 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--n
 .arch-lakebase .arch-card-sub { opacity: .8; }
 .arch-lakebase .arch-card-dot { background: var(--accent-2); }
 .arch-bands { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 10px; }
-.arch-band { background: var(--navy); color: #fff; border-radius: var(--radius); padding: 14px 18px; box-shadow: var(--shadow); }
-.arch-band b { display: block; color: var(--accent-2); font-size: 13px; margin-bottom: 4px; }
-.arch-band span { font-size: 12px; opacity: .85; }
+.arch-band { position: relative; overflow: hidden; color: #fff; border-radius: 10px; padding: 15px 18px;
+  background: linear-gradient(150deg, var(--navy), var(--navy-2));
+  box-shadow: 0 10px 26px -14px rgba(4,74,51,.5);
+  transition: transform .18s ease, box-shadow .18s ease; }
+.arch-band::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: linear-gradient(180deg, var(--accent-2), var(--accent)); }
+.arch-band::after { content: ""; position: absolute; right: -30%; top: -60%; width: 60%; height: 160%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent-2) 26%, transparent), transparent);
+  pointer-events: none; }
+.arch-band:hover { transform: translateY(-3px); box-shadow: 0 18px 38px -16px rgba(4,74,51,.6); }
+.arch-band b { display: block; color: var(--accent-2); font-size: 13px; margin-bottom: 4px; position: relative; }
+.arch-band span { font-size: 12px; opacity: .85; position: relative; }
 @media (max-width: 1100px) {
   .arch-flow { flex-direction: column; }
-  .arch-arrow { transform: rotate(90deg); align-self: center; padding: 4px 0; }
+  .arch-arrow { transform: rotate(90deg); align-self: center; padding: 4px 0;
+    animation: archArrowV 1.4s ease-in-out infinite; }
   .arch-apps { border-left: none; border-top: 2px dashed var(--border); padding-left: 0; padding-top: 14px; }
+}
+@keyframes archArrowV { 0%,100% { transform: rotate(90deg) translateX(0); opacity: .55; }
+  50% { transform: rotate(90deg) translateX(4px); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .arch-card, .arch-arrow { animation: none; }
+  .arch-card:hover::after { animation: none; opacity: 0; }
 }
 
 /* Platform (medallion) architecture sub-page */
@@ -263,6 +301,82 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--n
 .arch-bronze { border-left: 3px solid #b06a2c; }
 .arch-silver { border-left: 3px solid #8a94a6; }
 .arch-gold { border-left: 3px solid var(--accent); }
+
+/* ── SVG platform diagram ─────────────────────────────────────────────────
+   A 1120×520 logical board: HTML node tiles are absolutely positioned in that
+   coordinate space, layered over a viewBox-scaled SVG connector canvas. The
+   wrapper uses container-query units to scale the whole board down uniformly,
+   so nodes and connectors stay pixel-aligned at any width. */
+.pdiagram-wrap { container-type: inline-size; width: 100%; max-width: 1120px;
+  aspect-ratio: 1120 / 520; margin: 0 auto 18px; }
+.pdiagram { position: relative; width: 1120px; height: 520px; transform-origin: top left;
+  /* soft radial "lab bench" glow behind the whole platform */
+  background:
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 60%),
+    radial-gradient(80% 80% at 100% 100%, color-mix(in srgb, var(--accent-2) 8%, transparent), transparent 65%);
+  border-radius: 14px; }
+@container (max-width: 1120px) {
+  .pdiagram { transform: scale(calc(100cqw / 1120)); }
+}
+.pdiagram-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+
+/* dashed group boxes + their titles — faint brand-tinted fill for depth */
+.pgroup { fill: color-mix(in srgb, var(--accent) 3.5%, transparent);
+  stroke: color-mix(in srgb, var(--accent) 32%, var(--border));
+  stroke-width: 1.4; stroke-dasharray: 6 5; }
+.pgroup-t { fill: var(--accent); font-family: Inter, sans-serif; font-size: 12px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .06em; opacity: .85; }
+
+/* data-flow connectors — the "wow": animated dashes stream toward each
+   arrowhead, so data visibly moves through the pipeline. Colour is set inline
+   per flow type; a soft drop-shadow gives the lines a lit, glowing feel. */
+.pf { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 9 7; filter: drop-shadow(0 0 2px rgba(4,74,51,.18));
+  animation: pflow 1.1s linear infinite; }
+.pf-dot { stroke-dasharray: 3 6; animation-duration: .9s; }
+@keyframes pflow { to { stroke-dashoffset: -32; } }
+
+/* vertical section labels on the far left (Batch / Streaming) */
+.plabel { position: absolute; font-size: 10.5px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .12em; color: var(--muted); writing-mode: vertical-rl; transform: rotate(180deg);
+  opacity: .75; }
+
+/* a node tile: icon + label/sublabel, placed via inline left/top/width.
+   Gentle staggered entrance on (re)mount, lift + brand glow on hover. */
+.pnode { position: absolute; display: flex; align-items: center; gap: 11px; box-sizing: border-box;
+  background: linear-gradient(180deg, var(--panel), color-mix(in srgb, var(--panel) 92%, var(--canvas)));
+  border: 1px solid var(--border); border-radius: 12px; padding: 9px 13px;
+  box-shadow: 0 1px 2px rgba(4,74,51,.06), 0 10px 24px -12px rgba(4,74,51,.28);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  animation: pnodeIn .5s cubic-bezier(.2,.7,.3,1) both; }
+.pnode:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  box-shadow: 0 2px 4px rgba(4,74,51,.08), 0 18px 36px -14px rgba(4,74,51,.4); z-index: 5; }
+@keyframes pnodeIn { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+.pnode-ico { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border)); }
+.pnode-txt { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.pnode-txt b { font-size: 12.5px; font-weight: 700; color: var(--navy); }
+.pnode-txt em { font-style: normal; font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+/* tone accents — a left rail + a matching tint on the icon tile */
+.pnode-brand  { border-left: 3px solid var(--accent); }
+.pnode-ingest { border-left: 3px solid #8a5cf6; }
+.pnode-ingest .pnode-ico { background: color-mix(in srgb, #8a5cf6 12%, var(--panel)); border-color: color-mix(in srgb, #8a5cf6 26%, var(--border)); }
+.pnode-serve  { border-left: 3px solid #f79009; }
+.pnode-serve .pnode-ico { background: color-mix(in srgb, #f79009 13%, var(--panel)); border-color: color-mix(in srgb, #f79009 30%, var(--border)); }
+.pnode-bronze { border-left: 3px solid #b06a2c; }
+.pnode-bronze .pnode-ico { background: color-mix(in srgb, #b06a2c 12%, var(--panel)); border-color: color-mix(in srgb, #b06a2c 28%, var(--border)); }
+.pnode-silver { border-left: 3px solid #8a94a6; }
+.pnode-silver .pnode-ico { background: color-mix(in srgb, #8a94a6 14%, var(--panel)); border-color: color-mix(in srgb, #8a94a6 32%, var(--border)); }
+.pnode-gold   { border-left: 3px solid #d4a72c; }
+.pnode-gold .pnode-ico { background: color-mix(in srgb, #d4a72c 14%, var(--panel)); border-color: color-mix(in srgb, #d4a72c 32%, var(--border)); }
+
+/* respect reduced-motion: freeze flow + entrance, keep the static styling */
+@media (prefers-reduced-motion: reduce) {
+  .pf { animation: none; }
+  .pnode { animation: none; }
+}
 
 /* Platform diagram arrow legend */
 .plegend { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin: 0 0 16px; }
